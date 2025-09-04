@@ -1,0 +1,123 @@
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 20px;
+    background-color: #f5f5f5;
+}
+.container {
+    max-width: 1000px;
+    margin: auto;
+    background: white;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+}
+h1 {
+    text-align: center;
+    padding: 20px;
+    margin: 0;
+    background-color: #007bff;
+    color: white;
+}
+.top-section {
+    display: flex;
+    justify-content: space-between;
+    padding: 20px;
+}
+.image-box {
+    flex: 1;
+    margin: 0 10px;
+    text-align: center;
+    position: relative;
+}
+.image-box img {
+    max-width: 100%;
+    max-height: 300px;
+    border: 2px solid #ddd;
+    border-radius: 5px;
+}
+.bottom-section {
+    padding: 20px;
+    text-align: center;
+}
+.bottom-section img {
+    max-width: 100%;
+    max-height: 400px;
+    border: 2px solid #007bff;
+    border-radius: 5px;
+}
+.processing {
+    font-size: 18px;
+    color: #666;
+    padding: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #007bff;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-right: 10px;
+}
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+form {
+    padding: 40px;
+    text-align: center;
+}
+input[type="file"] {
+    display: block;
+    margin: 10px auto;
+    padding: 5px;
+}
+button {
+    padding: 12px 30px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 16px;
+    margin: 10px;
+}
+button:hover {
+    background-color: #0056b3;
+}
+
+input[type="hidden"] {
+    display: none;
+}
+input[type="checkbox"] {
+    margin: 5px;
+}
+.section-title {
+    margin-bottom: 10px;
+    font-weight: bold;
+    font-size: 18px;
+}
+.buttons-area {
+    text-align: center;
+    padding: 20px;
+}
+.success-message {
+    color: #28a745;
+    font-size: 18px;
+    padding: 10px;
+    text-align: center;
+}
+.pin-control {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    background: white;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    padding: 3px 5px;
+    font-size: 11px;
+}
