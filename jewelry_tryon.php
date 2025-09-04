@@ -126,12 +126,32 @@ try {
                 @chmod($user_dest, $config['uploads']['file_permissions']);
                 @chmod($jewelry_dest, $config['uploads']['file_permissions']);
 
+                // Optimize uploaded images for better performance
+                $user_optimization = optimize_image($user_dest, $user_filename);
+                $jewelry_optimization = optimize_image($jewelry_dest, $jewelry_filename);
+
+                if (!$user_optimization) {
+                    log_error("User photo optimization failed but upload succeeded: $user_filename", 'UPLOAD', 'WARNING');
+                }
+
+                if (!$jewelry_optimization) {
+                    log_error("Jewelry photo optimization failed but upload succeeded: $jewelry_filename", 'UPLOAD', 'WARNING');
+                }
+
+                // Get final image stats for logging
+                $user_stats = get_image_stats($user_dest);
+                $jewelry_stats = get_image_stats($jewelry_dest);
+
+                if ($user_stats && $jewelry_stats) {
+                    log_error("Optimized images - User: {$user_stats['width']}x{$user_stats['height']} ({$user_stats['size_human']}), Jewelry: {$jewelry_stats['width']}x{$jewelry_stats['height']} ({$jewelry_stats['size_human']})", 'UPLOAD', 'INFO');
+                }
+
                 // Update session state
                 $state = STATE_UPLOADED;
                 $user_photo_path = $user_dest;
                 $jewelry_photo_path = $jewelry_dest;
 
-                log_error("File upload successful: user=$user_filename, jewelry=$jewelry_filename", 'UPLOAD', 'INFO');
+                log_error("File upload and optimization successful: user=$user_filename, jewelry=$jewelry_filename", 'UPLOAD', 'INFO');
 
             } elseif ($action === ACTION_TRYON) {
                 // Handle try-on processing with validation

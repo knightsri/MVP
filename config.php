@@ -52,6 +52,14 @@ define('MAX_CURL_TIMEOUT', 60);
 define('PIN_STATE_ON', 'on');
 define('PIN_STATE_OFF', 'off');
 
+// Image optimization constants
+define('IMAGE_MAX_WIDTH', 1200);
+define('IMAGE_MAX_HEIGHT', 1200);
+define('IMAGE_JPEG_QUALITY', 85);
+define('IMAGE_PNG_COMPRESSION', 6);
+define('IMAGE_WEBP_QUALITY', 80);
+define('IMAGE_BACKUP_ORIGINAL', true);
+
 // Create required directories
 $required_dirs = [
     $config['uploads']['directory'],

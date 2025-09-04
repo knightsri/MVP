@@ -278,6 +278,271 @@ function get_upload_error_message($error_code) {
 }
 
 /**
+ * Image optimization functions
+ */
+
+// Function to optimize uploaded images
+function optimize_image($image_path, $original_name = '') {
+    global $config;
+
+    if (!file_exists($image_path)) {
+        log_error("Image optimization: File not found - $image_path", 'IMAGE_OPTIMIZATION', 'WARNING');
+        return false;
+    }
+
+    // Get image information
+    $image_info = getimagesize($image_path);
+    if ($image_info === false) {
+        log_error("Image optimization: Invalid image - $image_path", 'IMAGE_OPTIMIZATION', 'WARNING');
+        return false;
+    }
+
+    $mime_type = $image_info['mime'];
+    $original_width = $image_info[0];
+    $original_height = $image_info[1];
+    $original_size = filesize($image_path);
+
+    log_error("Image optimization: Starting - $original_name ($original_width x $original_height, {$original_size} bytes)", 'IMAGE_OPTIMIZATION', 'INFO');
+
+    // Check if image needs optimization
+    $needs_optimization = ($original_width > IMAGE_MAX_WIDTH || $original_height > IMAGE_MAX_HEIGHT);
+
+    if (!$needs_optimization) {
+        log_error("Image optimization: Image already optimal size - $original_name", 'IMAGE_OPTIMIZATION', 'INFO');
+        return true;
+    }
+
+    // Backup original if configured
+    if (IMAGE_BACKUP_ORIGINAL) {
+        $backup_path = $image_path . '.original';
+        if (!copy($image_path, $backup_path)) {
+            log_error("Image optimization: Failed to create backup - $image_path", 'IMAGE_OPTIMIZATION', 'WARNING');
+        } else {
+            log_error("Image optimization: Backup created - $backup_path", 'IMAGE_OPTIMIZATION', 'INFO');
+        }
+    }
+
+    $optimization_result = false;
+
+    // Optimize based on image type
+    switch ($mime_type) {
+        case 'image/jpeg':
+        case 'image/jpg':
+            $optimization_result = optimize_jpeg_image($image_path, $original_width, $original_height);
+            break;
+        case 'image/png':
+            $optimization_result = optimize_png_image($image_path, $original_width, $original_height);
+            break;
+        case 'image/gif':
+            $optimization_result = optimize_gif_image($image_path, $original_width, $original_height);
+            break;
+        default:
+            log_error("Image optimization: Unsupported format - $mime_type", 'IMAGE_OPTIMIZATION', 'WARNING');
+            return false;
+    }
+
+    if ($optimization_result) {
+        $optimized_size = filesize($image_path);
+        $size_saved = $original_size - $optimized_size;
+        $size_saved_percent = round(($size_saved / $original_size) * 100, 1);
+
+        log_error("Image optimization: Completed - $original_name (saved {$size_saved} bytes, {$size_saved_percent}%)", 'IMAGE_OPTIMIZATION', 'INFO');
+    } else {
+        log_error("Image optimization: Failed - $original_name", 'IMAGE_OPTIMIZATION', 'ERROR');
+    }
+
+    return $optimization_result;
+}
+
+// Function to optimize JPEG images
+function optimize_jpeg_image($image_path, $original_width, $original_height) {
+    // Calculate new dimensions
+    list($new_width, $new_height) = calculate_optimal_dimensions($original_width, $original_height);
+
+    try {
+        // Create new image
+        $source_image = imagecreatefromjpeg($image_path);
+        if (!$source_image) {
+            return false;
+        }
+
+        $optimized_image = imagecreatetruecolor($new_width, $new_height);
+
+        // Enable transparency handling for JPEG
+        $white = imagecolorallocate($optimized_image, 255, 255, 255);
+        imagefill($optimized_image, 0, 0, $white);
+
+        // Preserve EXIF orientation if available
+        if (function_exists('exif_read_data')) {
+            $exif = @exif_read_data($image_path);
+            if ($exif !== false && isset($exif['Orientation'])) {
+                $orientation = $exif['Orientation'];
+                switch ($orientation) {
+                    case 3:
+                        $source_image = imagerotate($source_image, 180, 0);
+                        break;
+                    case 6:
+                        $source_image = imagerotate($source_image, -90, 0);
+                        break;
+                    case 8:
+                        $source_image = imagerotate($source_image, 90, 0);
+                        break;
+                }
+            }
+        }
+
+        // Resize image
+        imagecopyresampled($optimized_image, $source_image, 0, 0, 0, 0, $new_width, $new_height, $original_width, $original_height);
+
+        // Save optimized image
+        $result = imagejpeg($optimized_image, $image_path, IMAGE_JPEG_QUALITY);
+
+        // Clean up memory
+        imagedestroy($source_image);
+        imagedestroy($optimized_image);
+
+        return $result;
+
+    } catch (Exception $e) {
+        log_error("JPEG optimization error: " . $e->getMessage(), 'IMAGE_OPTIMIZATION', 'ERROR');
+        return false;
+    }
+}
+
+// Function to optimize PNG images
+function optimize_png_image($image_path, $original_width, $original_height) {
+    // Calculate new dimensions
+    list($new_width, $new_height) = calculate_optimal_dimensions($original_width, $original_height);
+
+    try {
+        // Create new image
+        $source_image = imagecreatefrompng($image_path);
+        if (!$source_image) {
+            return false;
+        }
+
+        $optimized_image = imagecreatetruecolor($new_width, $new_height);
+
+        // Enable alpha channel for PNG
+        imagealphablending($optimized_image, false);
+        imagesavealpha($optimized_image, true);
+
+        // Resize image
+        imagecopyresampled($optimized_image, $source_image, 0, 0, 0, 0, $new_width, $new_height, $original_width, $original_height);
+
+        // Save optimized image
+        $result = imagepng($optimized_image, $image_path, IMAGE_PNG_COMPRESSION);
+
+        // Clean up memory
+        imagedestroy($source_image);
+        imagedestroy($optimized_image);
+
+        return $result;
+
+    } catch (Exception $e) {
+        log_error("PNG optimization error: " . $e->getMessage(), 'IMAGE_OPTIMIZATION', 'ERROR');
+        return false;
+    }
+}
+
+// Function to optimize GIF images
+function optimize_gif_image($image_path, $original_width, $original_height) {
+    // Calculate new dimensions
+    list($new_width, $new_height) = calculate_optimal_dimensions($original_width, $original_height);
+
+    try {
+        // Create new image
+        $source_image = imagecreatefromgif($image_path);
+        if (!$source_image) {
+            return false;
+        }
+
+        $optimized_image = imagecreatetruecolor($new_width, $new_height);
+
+        // Handle transparency for GIF
+        $transparent = imagecolorallocatealpha($optimized_image, 0, 0, 0, 127);
+        imagealphablending($optimized_image, false);
+        imagesavealpha($optimized_image, true);
+        imagefill($optimized_image, 0, 0, $transparent);
+
+        // Resize image
+        imagecopyresampled($optimized_image, $source_image, 0, 0, 0, 0, $new_width, $new_height, $original_width, $original_height);
+
+        // Save optimized image
+        $result = imagegif($optimized_image, $image_path);
+
+        // Clean up memory
+        imagedestroy($source_image);
+        imagedestroy($optimized_image);
+
+        return $result;
+
+    } catch (Exception $e) {
+        log_error("GIF optimization error: " . $e->getMessage(), 'IMAGE_OPTIMIZATION', 'ERROR');
+        return false;
+    }
+}
+
+// Function to calculate optimal dimensions (maintains aspect ratio)
+function calculate_optimal_dimensions($original_width, $original_height) {
+    $max_width = IMAGE_MAX_WIDTH;
+    $max_height = IMAGE_MAX_HEIGHT;
+
+    // If image is already within limits, return original dimensions
+    if ($original_width <= $max_width && $original_height <= $max_height) {
+        return [$original_width, $original_height];
+    }
+
+    // Calculate aspect ratio
+    $aspect_ratio = $original_width / $original_height;
+
+    // Calculate new dimensions
+    if ($original_width > $original_height) {
+        // Landscape or square
+        $new_width = min($original_width, $max_width);
+        $new_height = $new_width / $aspect_ratio;
+
+        // If height exceeds limit, recalculate
+        if ($new_height > $max_height) {
+            $new_height = $max_height;
+            $new_width = $new_height * $aspect_ratio;
+        }
+    } else {
+        // Portrait
+        $new_height = min($original_height, $max_height);
+        $new_width = $new_height * $aspect_ratio;
+
+        // If width exceeds limit, recalculate
+        if ($new_width > $max_width) {
+            $new_width = $max_width;
+            $new_height = $new_width / $aspect_ratio;
+        }
+    }
+
+    return [(int) round($new_width), (int) round($new_height)];
+}
+
+// Function to get image optimization statistics
+function get_image_stats($image_path) {
+    if (!file_exists($image_path)) {
+        return null;
+    }
+
+    $image_info = getimagesize($image_path);
+    if ($image_info === false) {
+        return null;
+    }
+
+    return [
+        'width' => $image_info[0],
+        'height' => $image_info[1],
+        'mime_type' => $image_info['mime'],
+        'size_bytes' => filesize($image_path),
+        'size_human' => format_bytes(filesize($image_path))
+    ];
+}
+
+/**
  * File serving functions (enhanced with validation)
  */
 
