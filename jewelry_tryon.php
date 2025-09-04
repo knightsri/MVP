@@ -20,15 +20,21 @@ $state = 'form';
 $user_photo_path = isset($_POST['user_photo_path']) ? $_POST['user_photo_path'] : '';
 $jewelry_photo_path = isset($_POST['jewelry_photo_path']) ? $_POST['jewelry_photo_path'] : '';
 $tryon_photo_path = '';
+$pin_user = isset($_POST['pin_user']) && $_POST['pin_user'] === 'on';
+$pin_jewelry = isset($_POST['pin_jewelry']) && $_POST['pin_jewelry'] === 'on';
 
 // Handle form submissions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['action'])) {
         if ($_POST['action'] === 'reset') {
-            // Reset to initial state
+            // Reset to initial state, but respect pinned photos
             $state = 'form';
-            $user_photo_path = '';
-            $jewelry_photo_path = '';
+            if (!$pin_user) {
+                $user_photo_path = '';
+            }
+            if (!$pin_jewelry) {
+                $jewelry_photo_path = '';
+            }
             $tryon_photo_path = '';
         } elseif ($_POST['action'] === 'upload') {
             // Handle photo upload stage
@@ -61,6 +67,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
         } elseif ($_POST['action'] === 'tryon') {
+            // Add visual waiting class flag
+            $waiting = true;
+
             // Handle try-on processing stage
             $user_dest = isset($_POST['user_photo_path']) ? $_POST['user_photo_path'] : '';
             $jewelry_dest = isset($_POST['jewelry_photo_path']) ? $_POST['jewelry_photo_path'] : '';
@@ -109,6 +118,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
     }
+} else {
+    // If GET request, clear pin states for new session
+    $pin_user = false;
+    $pin_jewelry = false;
 }
 
 // Display the HTML page based on current state
@@ -125,6 +138,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             margin: 0;
             padding: 20px;
             background-color: #f5f5f5;
+            <?php if (isset($waiting)) { echo 'cursor: wait;'; } ?>
         }
         .container {
             max-width: 1000px;
@@ -150,6 +164,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             flex: 1;
             margin: 0 10px;
             text-align: center;
+            position: relative;
         }
         .image-box img {
             max-width: 100%;
@@ -182,6 +197,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             border-top: 4px solid #007bff;
             border-radius: 50%;
             animation: spin 1s linear infinite;
+            margin-right: 10px;
         }
         @keyframes spin {
             0% { transform: rotate(0deg); }
@@ -205,12 +221,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             cursor: pointer;
             font-size: 16px;
             margin: 10px;
+            <?php if (isset($waiting)) { echo 'pointer-events: none; opacity: 0.6;'; } ?>
         }
         button:hover {
             background-color: #0056b3;
         }
+        .waiting {
+            cursor: wait !important;
+        }
         input[type="hidden"] {
             display: none;
+        }
+        input[type="checkbox"] {
+            margin: 5px;
         }
         .section-title {
             margin-bottom: 10px;
@@ -227,9 +250,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             padding: 10px;
             text-align: center;
         }
+        .pin-control {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            background: white;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            padding: 3px 5px;
+            font-size: 11px;
+        }
     </style>
 </head>
-<body>
+<body class="<?php if (isset($waiting)) echo 'waiting'; ?>">
     <div class="container">
         <h1>Jewelry Try-On Application</h1>
 
@@ -252,10 +285,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <div class="image-box">
                     <div class="section-title">Your Photo</div>
                     <img src="<?php echo htmlspecialchars($user_photo_path); ?>" alt="User Photo">
+                    <div class="pin-control">
+                        <label for="pin_user">
+                            <input type="checkbox" id="pin_user" name="pin_user" <?php if ($pin_user) echo 'checked'; ?>> PIN
+                        </label>
+                    </div>
                 </div>
                 <div class="image-box">
                     <div class="section-title">Jewelry Photo</div>
                     <img src="<?php echo htmlspecialchars($jewelry_photo_path); ?>" alt="Jewelry Photo">
+                    <div class="pin-control">
+                        <label for="pin_jewelry">
+                            <input type="checkbox" id="pin_jewelry" name="pin_jewelry" <?php if ($pin_jewelry) echo 'checked'; ?>> PIN
+                        </label>
+                    </div>
                 </div>
             </div>
             <div class="buttons-area">
@@ -263,10 +306,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <input type="hidden" name="action" value="tryon">
                     <input type="hidden" name="user_photo_path" value="<?php echo htmlspecialchars($user_photo_path); ?>">
                     <input type="hidden" name="jewelry_photo_path" value="<?php echo htmlspecialchars($jewelry_photo_path); ?>">
+                    <input type="hidden" name="pin_user" value="<?php echo $pin_user ? 'on' : 'off'; ?>">
+                    <input type="hidden" name="pin_jewelry" value="<?php echo $pin_jewelry ? 'on' : 'off'; ?>">
                     <button type="submit">Try On Jewelry</button>
                 </form>
                 <form action="" method="POST" style="display: inline;">
                     <input type="hidden" name="action" value="reset">
+                    <input type="hidden" name="pin_user" value="<?php echo $pin_user ? 'on' : 'off'; ?>">
+                    <input type="hidden" name="pin_jewelry" value="<?php echo $pin_jewelry ? 'on' : 'off'; ?>">
                     <button type="submit">Start Over</button>
                 </form>
             </div>
@@ -277,10 +324,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <div class="image-box">
                     <div class="section-title">Your Photo</div>
                     <img src="<?php echo htmlspecialchars($user_photo_path); ?>" alt="User Photo">
+                    <div class="pin-control">
+                        <label for="pin_user">
+                            <input type="checkbox" id="pin_user" name="pin_user" <?php if ($pin_user) echo 'checked'; ?>> PIN
+                        </label>
+                    </div>
                 </div>
                 <div class="image-box">
                     <div class="section-title">Jewelry Photo</div>
                     <img src="<?php echo htmlspecialchars($jewelry_photo_path); ?>" alt="Jewelry Photo">
+                    <div class="pin-control">
+                        <label for="pin_jewelry">
+                            <input type="checkbox" id="pin_jewelry" name="pin_jewelry" <?php if ($pin_jewelry) echo 'checked'; ?>> PIN
+                        </label>
+                    </div>
                 </div>
             </div>
             <div class="bottom-section">
@@ -290,8 +347,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <div class="buttons-area">
                 <form action="" method="POST" style="display: inline;">
                     <input type="hidden" name="action" value="reset">
+                    <input type="hidden" name="pin_user" value="<?php echo $pin_user ? 'on' : 'off'; ?>">
+                    <input type="hidden" name="pin_jewelry" value="<?php echo $pin_jewelry ? 'on' : 'off'; ?>">
                     <button type="submit">Start Over</button>
                 </form>
+            </div>
+        <?php elseif (isset($waiting)): ?>
+            <!-- Waiting for processing -->
+            <div class="processing">
+                <div class="spinner"></div>
+                <span>Processing... Please wait.</span>
             </div>
         <?php else: ?>
             <!-- Error state or unexpected condition -->
