@@ -297,6 +297,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <!-- Error state or unexpected condition -->
             <div style="text-align: center; padding: 40px;">
                 <p><?php if(isset($error_message)) echo htmlspecialchars($error_message); else echo 'An error occurred. Please refresh the page and try again.'; ?></p>
+                <div class="buttons-area">
+                    <form action="" method="POST">
+                        <input type="hidden" name="action" value="reset">
+                        <button type="submit">Start Over</button>
+                    </form>
+                </div>
             </div>
         <?php endif; ?>
     </div>
