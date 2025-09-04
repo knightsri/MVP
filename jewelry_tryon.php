@@ -1,155 +1,200 @@
 <?php
-// Include configuration and functions
+// Include configuration first to define constants
 require_once 'config.php';
 require_once 'functions.php';
 
-// Handle secure file serving
-if (isset($_GET['file']) && !empty($_GET['file'])) {
-    $file_path = $uploads_dir . basename($_GET['file']); // Use basename to prevent directory traversal
-    $secure_path = serve_secure_file($file_path);
+try {
+    // Handle secure file serving with validation
+    if (isset($_GET['file'])) {
+        $file_param = sanitize_string($_GET['file'], 'FILE_SERVING', $config['validation']['max_filename_length']);
 
-    if ($secure_path !== null) {
-        // Get MIME type for proper Content-Type header
-        $finfo = finfo_open(FILEINFO_MIME_TYPE);
-        $mime_type = finfo_file($finfo, $secure_path);
-        finfo_close($finfo);
+        if (!empty($file_param)) {
+            $file_path = $config['uploads']['directory'] . $file_param;
+            $secure_path = serve_secure_file($file_path);
 
-        // Send appropriate headers
-        header('Content-Type: ' . $mime_type);
-        header('Content-Length: ' . filesize($secure_path));
-        header('Cache-Control: private, max-age=3600'); // Cache for 1 hour
+            if ($secure_path !== null && file_exists($secure_path)) {
+                // Get MIME type for proper Content-Type header
+                $mime_type = mime_content_type($secure_path);
+                if (!$mime_type) {
+                    $mime_type = 'application/octet-stream';
+                }
 
-        // Output file content
-        readfile($secure_path);
-        exit;
-    } else {
-        // File not found or invalid path
-        header('HTTP/1.0 404 Not Found');
-        exit;
-    }
-}
+                // Send appropriate headers
+                header('Content-Type: ' . $mime_type);
+                header('Content-Length: ' . filesize($secure_path));
+                header('Cache-Control: private, max-age=' . $config['uploads']['cache_time']);
+                header('X-Content-Type-Options: nosniff');
 
-// Initialize variables
-$state = 'form';
-$user_photo_path = isset($_POST['user_photo_path']) ? $_POST['user_photo_path'] : '';
-$jewelry_photo_path = isset($_POST['jewelry_photo_path']) ? $_POST['jewelry_photo_path'] : '';
-$tryon_photo_path = '';
-$pin_user = isset($_POST['pin_user']) && $_POST['pin_user'] === 'on';
-$pin_jewelry = isset($_POST['pin_jewelry']) && $_POST['pin_jewelry'] === 'on';
-
-// Handle form submissions
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (isset($_POST['action'])) {
-        if ($_POST['action'] === 'reset') {
-            // Reset to initial state, but respect pinned photos
-            $state = 'form';
-            if (!$pin_user) {
-                $user_photo_path = '';
-            }
-            if (!$pin_jewelry) {
-                $jewelry_photo_path = '';
-            }
-            $tryon_photo_path = '';
-        } elseif ($_POST['action'] === 'upload') {
-            // Handle photo upload stage
-            if (!isset($_FILES['user_photo']) || !isset($_FILES['jewelry_photo'])) {
-                $error_message = 'Both user photo and jewelry photo are required.';
+                // Output file content and exit
+                readfile($secure_path);
+                exit;
             } else {
+                log_error("File not accessible: $file_param", 'FILE_SERVING', 'WARNING');
+
+                header('HTTP/1.0 404 Not Found');
+                header('Content-Type: text/plain');
+                echo 'File not found or access denied.';
+                exit;
+            }
+        }
+    }
+
+    // Initialize session state securely
+    $session_state = initialize_session_state();
+
+    // Initialize variables with validation
+    $state = STATE_FORM;
+    $user_photo_path = '';
+    $jewelry_photo_path = '';
+    $tryon_photo_path = '';
+    $pin_user = false;
+    $pin_jewelry = false;
+    $error_message = '';
+
+    // Handle form submissions with comprehensive validation
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        try {
+            // Sanitize all POST data
+            $postData = sanitize_post_data($_POST);
+
+            if (!isset($postData['action'])) {
+                throw new Exception('Missing action parameter');
+            }
+
+            $action = validate_action($postData['action'], 'FORM_PROCESSING');
+
+            if (!$action) {
+                throw new Exception('Invalid action parameter');
+            }
+
+            if ($action === ACTION_RESET) {
+                // Handle reset action with validation
+                $pin_user = validate_pin_state($postData['pin_user'] ?? '', 'RESET') === PIN_STATE_ON;
+                $pin_jewelry = validate_pin_state($postData['pin_jewelry'] ?? '', 'RESET') === PIN_STATE_ON;
+
+                // Reset to initial state, but respect pinned photos
+                $state = STATE_FORM;
+                if (!$pin_user) {
+                    $user_photo_path = '';
+                }
+                if (!$pin_jewelry) {
+                    $jewelry_photo_path = '';
+                }
+                $tryon_photo_path = '';
+
+            } elseif ($action === ACTION_UPLOAD) {
+                // Handle photo upload with comprehensive validation
+                if (!validate_uploaded_files($_FILES)) {
+                    throw new Exception('Both user photo and jewelry photo files are required');
+                }
+
                 $user_photo = $_FILES['user_photo'];
                 $jewelry_photo = $_FILES['jewelry_photo'];
 
                 // Validate user photo
                 $user_validation = validate_file_upload($user_photo);
                 if (!$user_validation['valid']) {
-                    $error_message = 'User photo: ' . $user_validation['error'];
-                } else {
-                    // Validate jewelry photo
-                    $jewelry_validation = validate_file_upload($jewelry_photo);
-                    if (!$jewelry_validation['valid']) {
-                        $error_message = 'Jewelry photo: ' . $jewelry_validation['error'];
-                    } else {
-                        // Generate random filenames
-                        $user_filename = generate_random_filename($user_photo['name']);
-                        $jewelry_filename = generate_random_filename($jewelry_photo['name']);
-
-                        // Move uploaded files to uploads directory
-                        $user_dest = $uploads_dir . $user_filename;
-                        $jewelry_dest = $uploads_dir . $jewelry_filename;
-
-                        if (move_uploaded_file($user_photo['tmp_name'], $user_dest) &&
-                            move_uploaded_file($jewelry_photo['tmp_name'], $jewelry_dest)) {
-                            // Set secure file permissions
-                            chmod($user_dest, 0644);
-                            chmod($jewelry_dest, 0644);
-
-                            $state = 'uploaded';
-                            $user_photo_path = $user_dest;
-                            $jewelry_photo_path = $jewelry_dest;
-                        } else {
-                            $error_message = 'Failed to save uploaded files.';
-                        }
-                    }
+                    throw new Exception('User photo validation failed: ' . $user_validation['error']);
                 }
-            }
-        } elseif ($_POST['action'] === 'tryon') {
-            // Handle try-on processing stage
 
-            // Sanitize and validate file paths from POST data
-            $user_dest = sanitize_file_path(isset($_POST['user_photo_path']) ? $_POST['user_photo_path'] : '', $uploads_dir);
-            $jewelry_dest = sanitize_file_path(isset($_POST['jewelry_photo_path']) ? $_POST['jewelry_photo_path'] : '', $uploads_dir);
-
-            // Check if paths are valid
-            if ($user_dest === null || $jewelry_dest === null) {
-                $error_message = 'Invalid file path detected.';
-                $state = 'form';
-            } elseif (empty($user_dest) || empty($jewelry_dest) ||
-                !file_exists($user_dest) || !file_exists($jewelry_dest)) {
-                $error_message = 'Photos not found. Please upload again.';
-            } else {
-                // Prepare cURL request
-                $ch = curl_init();
-                curl_setopt($ch, CURLOPT_URL, $webhook_url);
-                curl_setopt($ch, CURLOPT_POST, true);
-                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-
-                // Prepare multipart data with files and text prompt
-                $user_filename = basename($user_dest);
-                $jewelry_filename = basename($jewelry_dest);
-
-                $postData = [
-                    'user_photo' => new CURLFile($user_dest, mime_content_type($user_dest), $user_filename),
-                    'jewelry_photo' => new CURLFile($jewelry_dest, mime_content_type($jewelry_dest), $jewelry_filename),
-                    'prompt' => 'Try on this jewelry bracelet on the user\'s wrist', // Text prompt for AI
-                ];
-
-                curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
-
-                // Execute the request
-                $response = curl_exec($ch);
-                $error = curl_error($ch);
-                $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-                curl_close($ch);
-
-                if ($error || $http_code !== 200) {
-                    $error_message = 'Failed to process the request. HTTP Code: ' . $http_code . ', Error: ' . $error;
-                } else {
-                    // Save the final try-on photo
-                    $tryon_filename = generate_random_filename('tryon_result.png');
-                    $tryon_dest = $uploads_dir . $tryon_filename;
-                    if (file_put_contents($tryon_dest, $response) !== false) {
-                        $state = 'processed';
-                        $tryon_photo_path = $tryon_dest;
-                    } else {
-                        $error_message = 'Failed to save the try-on result.';
-                    }
+                // Validate jewelry photo
+                $jewelry_validation = validate_file_upload($jewelry_photo);
+                if (!$jewelry_validation['valid']) {
+                    throw new Exception('Jewelry photo validation failed: ' . $jewelry_validation['error']);
                 }
+
+                // Generate secure filenames
+                $user_filename = generate_random_filename($user_photo['name']);
+                $jewelry_filename = generate_random_filename($jewelry_photo['name']);
+
+                // Construct safe file paths
+                $user_dest = $config['uploads']['directory'] . $user_filename;
+                $jewelry_dest = $config['uploads']['directory'] . $jewelry_filename;
+
+                // Move uploaded files with error handling
+                if (!move_uploaded_file($user_photo['tmp_name'], $user_dest)) {
+                    throw new Exception('Failed to save user photo');
+                }
+
+                if (!move_uploaded_file($jewelry_photo['tmp_name'], $jewelry_dest)) {
+                    // Clean up the first file if second fails
+                    @unlink($user_dest);
+                    throw new Exception('Failed to save jewelry photo');
+                }
+
+                // Set secure permissions
+                @chmod($user_dest, $config['uploads']['file_permissions']);
+                @chmod($jewelry_dest, $config['uploads']['file_permissions']);
+
+                // Update session state
+                $state = STATE_UPLOADED;
+                $user_photo_path = $user_dest;
+                $jewelry_photo_path = $jewelry_dest;
+
+                log_error("File upload successful: user=$user_filename, jewelry=$jewelry_filename", 'UPLOAD', 'INFO');
+
+            } elseif ($action === ACTION_TRYON) {
+                // Handle try-on processing with validation
+                $pin_user = validate_pin_state($postData['pin_user'] ?? '', 'TRYON') === PIN_STATE_ON;
+                $pin_jewelry = validate_pin_state($postData['pin_jewelry'] ?? '', 'TRYON') === PIN_STATE_ON;
+
+                // Sanitize and validate file paths from POST data
+                $user_dest = sanitize_file_path(
+                    $postData['user_photo_path'] ?? '',
+                    $config['uploads']['directory']
+                );
+                $jewelry_dest = sanitize_file_path(
+                    $postData['jewelry_photo_path'] ?? '',
+                    $config['uploads']['directory']
+                );
+
+                // Check if paths are valid
+                if ($user_dest === null || $jewelry_dest === null) {
+                    throw new Exception('Invalid file path detected');
+                }
+
+                if (empty($user_dest) || empty($jewelry_dest) ||
+                    !file_exists($user_dest) || !file_exists($jewelry_dest)) {
+                    throw new Exception('Photo files not found. Please upload again');
+                }
+
+                // Call webhook with retry mechanism
+                $webhook_result = call_webhook_with_retry($user_dest, $jewelry_dest, $config['webhook']['max_retries']);
+
+                if (!$webhook_result['success']) {
+                    throw new Exception('Webhook processing failed: ' . $webhook_result['error']);
+                }
+
+                // Save the final try-on photo
+                $tryon_filename = generate_random_filename('tryon_result.png');
+                $tryon_dest = $config['uploads']['directory'] . $tryon_filename;
+
+                if (file_put_contents($tryon_dest, $webhook_result['response']) === false) {
+                    throw new Exception('Failed to save try-on result');
+                }
+
+                // Set permissions and update state
+                @chmod($tryon_dest, $config['uploads']['file_permissions']);
+                $state = STATE_PROCESSED;
+                $tryon_photo_path = $tryon_dest;
+
+                log_error("Try-on processing successful: $tryon_filename", 'PROCESSING', 'INFO');
             }
+
+        } catch (Exception $e) {
+            $error_message = handle_exception($e, 'FORM_PROCESSING');
+            $state = STATE_FORM; // Reset to form on error
         }
+
+    } else {
+        // GET request - clear pin states for new session
+        $pin_user = false;
+        $pin_jewelry = false;
     }
-} else {
-    // If GET request, clear pin states for new session
-    $pin_user = false;
-    $pin_jewelry = false;
+
+} catch (Exception $e) {
+    $error_message = handle_exception($e, 'MAIN_PROCESSING');
+    $state = STATE_FORM;
 }
 
 // Include the template to display the HTML
