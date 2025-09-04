@@ -4,15 +4,108 @@ $webhook_url = 'https://your-n8n-webhook-url.com/endpoint'; // Replace with your
 $content_type = 'image/png'; // Adjust to 'image/jpeg' if needed
 $uploads_dir = 'uploads/';
 
-// Ensure uploads directory exists
+// Security configuration
+define('MAX_FILE_SIZE', 5 * 1024 * 1024); // 5MB
+define('ALLOWED_MIME_TYPES', [
+    'image/jpeg',
+    'image/jpg', 
+    'image/png',
+    'image/gif'
+]);
+define('ALLOWED_EXTENSIONS', ['jpg', 'jpeg', 'png', 'gif']);
+
+// Ensure uploads directory exists with secure permissions
 if (!is_dir($uploads_dir)) {
-    mkdir($uploads_dir, 0777, true);
+    mkdir($uploads_dir, 0755, true);
+    // Create .htaccess to prevent direct access
+    file_put_contents($uploads_dir . '.htaccess', "deny from all\n");
 }
 
 // Function to generate a random filename with original extension
 function generate_random_filename($original_name) {
     $extension = pathinfo($original_name, PATHINFO_EXTENSION);
     return uniqid('img_', true) . '.' . $extension;
+}
+
+// Function to validate uploaded files
+function validate_file_upload($file) {
+    // Check if file upload was successful
+    if ($file['error'] !== UPLOAD_ERR_OK) {
+        return ['valid' => false, 'error' => 'File upload failed.'];
+    }
+    
+    // Check file size
+    if ($file['size'] > MAX_FILE_SIZE) {
+        return ['valid' => false, 'error' => 'File is too large. Maximum size is ' . (MAX_FILE_SIZE / 1024 / 1024) . 'MB.'];
+    }
+    
+    // Validate file extension
+    $extension = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+    if (!in_array($extension, ALLOWED_EXTENSIONS)) {
+        return ['valid' => false, 'error' => 'Invalid file type. Only ' . implode(', ', ALLOWED_EXTENSIONS) . ' files are allowed.'];
+    }
+    
+    // Get real MIME type from file content (more secure than relying on browser)
+    $finfo = finfo_open(FILEINFO_MIME_TYPE);
+    $mime_type = finfo_file($finfo, $file['tmp_name']);
+    finfo_close($finfo);
+    
+    // Validate MIME type
+    if (!in_array($mime_type, ALLOWED_MIME_TYPES)) {
+        return ['valid' => false, 'error' => 'Invalid file format detected.'];
+    }
+    
+    // Additional check: verify file is actually an image
+    $image_info = getimagesize($file['tmp_name']);
+    if ($image_info === false) {
+        return ['valid' => false, 'error' => 'File is not a valid image.'];
+    }
+    
+    return ['valid' => true, 'error' => null];
+}
+
+// Function to serve files securely
+function serve_secure_file($file_path) {
+    // Validate file path to prevent directory traversal
+    $real_path = realpath($file_path);
+    $uploads_real_path = realpath(__DIR__ . '/uploads/');
+    
+    // Check if file is within uploads directory
+    if (!$real_path || strpos($real_path, $uploads_real_path) !== 0) {
+        return null;
+    }
+    
+    if (!file_exists($real_path)) {
+        return null;
+    }
+    
+    return $real_path;
+}
+
+// Handle secure file serving
+if (isset($_GET['file']) && !empty($_GET['file'])) {
+    $file_path = $uploads_dir . basename($_GET['file']); // Use basename to prevent directory traversal
+    $secure_path = serve_secure_file($file_path);
+    
+    if ($secure_path !== null) {
+        // Get MIME type for proper Content-Type header
+        $finfo = finfo_open(FILEINFO_MIME_TYPE);
+        $mime_type = finfo_file($finfo, $secure_path);
+        finfo_close($finfo);
+        
+        // Send appropriate headers
+        header('Content-Type: ' . $mime_type);
+        header('Content-Length: ' . filesize($secure_path));
+        header('Cache-Control: private, max-age=3600'); // Cache for 1 hour
+        
+        // Output file content
+        readfile($secure_path);
+        exit;
+    } else {
+        // File not found or invalid path
+        header('HTTP/1.0 404 Not Found');
+        exit;
+    }
 }
 
 // Initialize variables
@@ -44,25 +137,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $user_photo = $_FILES['user_photo'];
                 $jewelry_photo = $_FILES['jewelry_photo'];
 
-                // Validate uploads
-                if ($user_photo['error'] !== UPLOAD_ERR_OK || $jewelry_photo['error'] !== UPLOAD_ERR_OK) {
-                    $error_message = 'File upload failed.';
+                // Validate user photo
+                $user_validation = validate_file_upload($user_photo);
+                if (!$user_validation['valid']) {
+                    $error_message = 'User photo: ' . $user_validation['error'];
                 } else {
-                    // Generate random filenames
-                    $user_filename = generate_random_filename($user_photo['name']);
-                    $jewelry_filename = generate_random_filename($jewelry_photo['name']);
-
-                    // Move uploaded files to uploads directory
-                    $user_dest = $uploads_dir . $user_filename;
-                    $jewelry_dest = $uploads_dir . $jewelry_filename;
-
-                    if (move_uploaded_file($user_photo['tmp_name'], $user_dest) &&
-                        move_uploaded_file($jewelry_photo['tmp_name'], $jewelry_dest)) {
-                        $state = 'uploaded';
-                        $user_photo_path = $user_dest;
-                        $jewelry_photo_path = $jewelry_dest;
+                    // Validate jewelry photo
+                    $jewelry_validation = validate_file_upload($jewelry_photo);
+                    if (!$jewelry_validation['valid']) {
+                        $error_message = 'Jewelry photo: ' . $jewelry_validation['error'];
                     } else {
-                        $error_message = 'Failed to save uploaded files.';
+                        // Generate random filenames
+                        $user_filename = generate_random_filename($user_photo['name']);
+                        $jewelry_filename = generate_random_filename($jewelry_photo['name']);
+
+                        // Move uploaded files to uploads directory
+                        $user_dest = $uploads_dir . $user_filename;
+                        $jewelry_dest = $uploads_dir . $jewelry_filename;
+
+                        if (move_uploaded_file($user_photo['tmp_name'], $user_dest) &&
+                            move_uploaded_file($jewelry_photo['tmp_name'], $jewelry_dest)) {
+                            // Set secure file permissions
+                            chmod($user_dest, 0644);
+                            chmod($jewelry_dest, 0644);
+                            
+                            $state = 'uploaded';
+                            $user_photo_path = $user_dest;
+                            $jewelry_photo_path = $jewelry_dest;
+                        } else {
+                            $error_message = 'Failed to save uploaded files.';
+                        }
                     }
                 }
             }
@@ -278,9 +382,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <div class="image-box">
                     <div class="section-title">Your Photo</div>
                     <?php
-                    $user_web_path = str_replace('\\', '/', $user_photo_path);
                     if (file_exists($user_photo_path) && filesize($user_photo_path) > 0) {
-                        echo '<img src="' . htmlspecialchars($user_web_path) . '" alt="User Photo">';
+                        $user_filename = basename($user_photo_path);
+                        echo '<img src="?file=' . urlencode($user_filename) . '" alt="User Photo">';
                     } else {
                         echo '<div style="width: 100%; height: 300px; background: #f0f0f0; display: flex; align-items: center; justify-content: center; color: #666;">Image not found</div>';
                     }
@@ -294,9 +398,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <div class="image-box">
                     <div class="section-title">Jewelry Photo</div>
                     <?php
-                    $jewelry_web_path = str_replace('\\', '/', $jewelry_photo_path);
                     if (file_exists($jewelry_photo_path) && filesize($jewelry_photo_path) > 0) {
-                        echo '<img src="' . htmlspecialchars($jewelry_web_path) . '" alt="Jewelry Photo">';
+                        $jewelry_filename = basename($jewelry_photo_path);
+                        echo '<img src="?file=' . urlencode($jewelry_filename) . '" alt="Jewelry Photo">';
                     } else {
                         echo '<div style="width: 100%; height: 300px; background: #f0f0f0; display: flex; align-items: center; justify-content: center; color: #666;">Image not found</div>';
                     }
@@ -331,9 +435,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <div class="image-box">
                     <div class="section-title">Your Photo</div>
                     <?php
-                    $user_web_path = str_replace('\\', '/', $user_photo_path);
                     if (file_exists($user_photo_path) && filesize($user_photo_path) > 0) {
-                        echo '<img src="' . htmlspecialchars($user_web_path) . '" alt="User Photo">';
+                        $user_filename = basename($user_photo_path);
+                        echo '<img src="?file=' . urlencode($user_filename) . '" alt="User Photo">';
                     } else {
                         echo '<div style="width: 100%; height: 300px; background: #f0f0f0; display: flex; align-items: center; justify-content: center; color: #666;">Image not found</div>';
                     }
@@ -347,9 +451,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <div class="image-box">
                     <div class="section-title">Jewelry Photo</div>
                     <?php
-                    $jewelry_web_path = str_replace('\\', '/', $jewelry_photo_path);
                     if (file_exists($jewelry_photo_path) && filesize($jewelry_photo_path) > 0) {
-                        echo '<img src="' . htmlspecialchars($jewelry_web_path) . '" alt="Jewelry Photo">';
+                        $jewelry_filename = basename($jewelry_photo_path);
+                        echo '<img src="?file=' . urlencode($jewelry_filename) . '" alt="Jewelry Photo">';
                     } else {
                         echo '<div style="width: 100%; height: 300px; background: #f0f0f0; display: flex; align-items: center; justify-content: center; color: #666;">Image not found</div>';
                     }
@@ -364,9 +468,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <div class="bottom-section">
                 <div class="section-title">Try-On Result</div>
                 <?php
-                $tryon_web_path = str_replace('\\', '/', $tryon_photo_path);
                 if (file_exists($tryon_photo_path) && filesize($tryon_photo_path) > 0) {
-                    echo '<img src="' . htmlspecialchars($tryon_web_path) . '" alt="Try-On Result">';
+                    $tryon_filename = basename($tryon_photo_path);
+                    echo '<img src="?file=' . urlencode($tryon_filename) . '" alt="Try-On Result">';
                 } else {
                     echo '<div style="width: 100%; height: 200px; background: #f0f0f0; display: flex; align-items: center; justify-content: center; color: #666;">Try-on result not found</div>';
                 }
