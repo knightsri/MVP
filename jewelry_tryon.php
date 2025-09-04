@@ -1,7 +1,4 @@
 <?php
-// Start session to manage application state
-session_start();
-
 // Configuration variables
 $webhook_url = 'https://your-n8n-webhook-url.com/endpoint'; // Replace with your n8n webhook URL
 $content_type = 'image/png'; // Adjust to 'image/jpeg' if needed
@@ -18,19 +15,11 @@ function generate_random_filename($original_name) {
     return uniqid('img_', true) . '.' . $extension;
 }
 
-// Initialize session variables if not set
-if (!isset($_SESSION['state'])) {
-    $_SESSION['state'] = 'form';
-    $_SESSION['user_photo_path'] = '';
-    $_SESSION['jewelry_photo_path'] = '';
-    $_SESSION['tryon_photo_path'] = '';
-}
-
-// Determine current state
-$state = $_SESSION['state'];
-$user_photo_path = $_SESSION['user_photo_path'];
-$jewelry_photo_path = $_SESSION['jewelry_photo_path'];
-$tryon_photo_path = $_SESSION['tryon_photo_path'];
+// Initialize variables
+$state = 'form';
+$user_photo_path = isset($_POST['user_photo_path']) ? $_POST['user_photo_path'] : '';
+$jewelry_photo_path = isset($_POST['jewelry_photo_path']) ? $_POST['jewelry_photo_path'] : '';
+$tryon_photo_path = '';
 
 // Handle form submissions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -38,92 +27,80 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($_POST['action'] === 'upload') {
             // Handle photo upload stage
             if (!isset($_FILES['user_photo']) || !isset($_FILES['jewelry_photo'])) {
-                die('<p>Error: Both user photo and jewelry photo are required.</p>');
+                $error_message = 'Both user photo and jewelry photo are required.';
+            } else {
+                $user_photo = $_FILES['user_photo'];
+                $jewelry_photo = $_FILES['jewelry_photo'];
+
+                // Validate uploads
+                if ($user_photo['error'] !== UPLOAD_ERR_OK || $jewelry_photo['error'] !== UPLOAD_ERR_OK) {
+                    $error_message = 'File upload failed.';
+                } else {
+                    // Generate random filenames
+                    $user_filename = generate_random_filename($user_photo['name']);
+                    $jewelry_filename = generate_random_filename($jewelry_photo['name']);
+
+                    // Move uploaded files to uploads directory
+                    $user_dest = $uploads_dir . $user_filename;
+                    $jewelry_dest = $uploads_dir . $jewelry_filename;
+
+                    if (move_uploaded_file($user_photo['tmp_name'], $user_dest) &&
+                        move_uploaded_file($jewelry_photo['tmp_name'], $jewelry_dest)) {
+                        $state = 'uploaded';
+                        $user_photo_path = $user_dest;
+                        $jewelry_photo_path = $jewelry_dest;
+                    } else {
+                        $error_message = 'Failed to save uploaded files.';
+                    }
+                }
             }
-
-            $user_photo = $_FILES['user_photo'];
-            $jewelry_photo = $_FILES['jewelry_photo'];
-
-            // Validate uploads
-            if ($user_photo['error'] !== UPLOAD_ERR_OK || $jewelry_photo['error'] !== UPLOAD_ERR_OK) {
-                die('<p>Error: File upload failed.</p>');
-            }
-
-            // Generate random filenames
-            $user_filename = generate_random_filename($user_photo['name']);
-            $jewelry_filename = generate_random_filename($jewelry_photo['name']);
-
-            // Move uploaded files to uploads directory
-            $user_dest = $uploads_dir . $user_filename;
-            $jewelry_dest = $uploads_dir . $jewelry_filename;
-
-            if (!move_uploaded_file($user_photo['tmp_name'], $user_dest) ||
-                !move_uploaded_file($jewelry_photo['tmp_name'], $jewelry_dest)) {
-                die('<p>Error: Failed to save uploaded files.</p>');
-            }
-
-            // Update session variables
-            $_SESSION['state'] = 'uploaded';
-            $_SESSION['user_photo_path'] = $user_dest;
-            $_SESSION['jewelry_photo_path'] = $jewelry_dest;
-
-            // Update local variables
-            $state = 'uploaded';
-            $user_photo_path = $user_dest;
-            $jewelry_photo_path = $jewelry_dest;
         } elseif ($_POST['action'] === 'tryon') {
             // Handle try-on processing stage
-            if (empty($_SESSION['user_photo_path']) || empty($_SESSION['jewelry_photo_path'])) {
-                die('<p>Error: Photos not found. Please upload again.</p>');
+            $user_dest = isset($_POST['user_photo_path']) ? $_POST['user_photo_path'] : '';
+            $jewelry_dest = isset($_POST['jewelry_photo_path']) ? $_POST['jewelry_photo_path'] : '';
+
+            if (empty($user_dest) || empty($jewelry_dest) ||
+                !file_exists($user_dest) || !file_exists($jewelry_dest)) {
+                $error_message = 'Photos not found. Please upload again.';
+            } else {
+                // Prepare cURL request
+                $ch = curl_init();
+                curl_setopt($ch, CURLOPT_URL, $webhook_url);
+                curl_setopt($ch, CURLOPT_POST, true);
+                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+
+                // Prepare multipart data with files and text prompt
+                $user_filename = basename($user_dest);
+                $jewelry_filename = basename($jewelry_dest);
+
+                $postData = [
+                    'user_photo' => new CURLFile($user_dest, mime_content_type($user_dest), $user_filename),
+                    'jewelry_photo' => new CURLFile($jewelry_dest, mime_content_type($jewelry_dest), $jewelry_filename),
+                    'prompt' => 'Try on this jewelry bracelet on the user\'s wrist', // Text prompt for AI
+                ];
+
+                curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
+
+                // Execute the request
+                $response = curl_exec($ch);
+                $error = curl_error($ch);
+                $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                curl_close($ch);
+
+                if ($error || $http_code !== 200) {
+                    $error_message = 'Failed to process the request. HTTP Code: ' . $http_code . ', Error: ' . $error;
+                } else {
+                    // Save the final try-on photo
+                    $tryon_filename = generate_random_filename('tryon_result.png');
+                    $tryon_dest = $uploads_dir . $tryon_filename;
+                    if (file_put_contents($tryon_dest, $response) !== false) {
+                        $state = 'processed';
+                        $tryon_photo_path = $tryon_dest;
+                    } else {
+                        $error_message = 'Failed to save the try-on result.';
+                    }
+                }
             }
-
-            $user_dest = $_SESSION['user_photo_path'];
-            $jewelry_dest = $_SESSION['jewelry_photo_path'];
-
-            // Prepare cURL request
-            $ch = curl_init();
-            curl_setopt($ch, CURLOPT_URL, $webhook_url);
-            curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-
-            // Prepare multipart data with files and text prompt
-            $user_filename = basename($user_dest);
-            $jewelry_filename = basename($jewelry_dest);
-            $user_info = pathinfo($user_dest);
-            $jewelry_info = pathinfo($jewelry_dest);
-
-            $postData = [
-                'user_photo' => new CURLFile($user_dest, mime_content_type($user_dest), $user_filename),
-                'jewelry_photo' => new CURLFile($jewelry_dest, mime_content_type($jewelry_dest), $jewelry_filename),
-                'prompt' => 'Try on this jewelry bracelet on the user\'s wrist', // Text prompt for AI
-            ];
-
-            curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
-
-            // Execute the request
-            $response = curl_exec($ch);
-            $error = curl_error($ch);
-            $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            curl_close($ch);
-
-            if ($error || $http_code !== 200) {
-                die('<p>Error: Failed to process the request. HTTP Code: ' . $http_code . ', Error: ' . $error . '</p>');
-            }
-
-            // Save the final try-on photo
-            $tryon_filename = generate_random_filename('tryon_result.png');
-            $tryon_dest = $uploads_dir . $tryon_filename;
-            if (file_put_contents($tryon_dest, $response) === false) {
-                die('<p>Error: Failed to save the try-on result.</p>');
-            }
-
-            // Update session variables
-            $_SESSION['state'] = 'processed';
-            $_SESSION['tryon_photo_path'] = $tryon_dest;
-
-            // Update local variables
-            $state = 'processed';
-            $tryon_photo_path = $tryon_dest;
         }
     }
 }
@@ -278,6 +255,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <div class="buttons-area">
                 <form action="" method="POST" style="display: inline;">
                     <input type="hidden" name="action" value="tryon">
+                    <input type="hidden" name="user_photo_path" value="<?php echo htmlspecialchars($user_photo_path); ?>">
+                    <input type="hidden" name="jewelry_photo_path" value="<?php echo htmlspecialchars($jewelry_photo_path); ?>">
                     <button type="submit">Try On Jewelry</button>
                 </form>
             </div>
@@ -301,7 +280,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <?php else: ?>
             <!-- Error state or unexpected condition -->
             <div style="text-align: center; padding: 40px;">
-                <p>An error occurred. Please refresh the page and try again.</p>
+                <p><?php if(isset($error_message)) echo htmlspecialchars($error_message); else echo 'An error occurred. Please refresh the page and try again.'; ?></p>
             </div>
         <?php endif; ?>
     </div>
