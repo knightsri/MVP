@@ -24,7 +24,13 @@ $tryon_photo_path = '';
 // Handle form submissions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['action'])) {
-        if ($_POST['action'] === 'upload') {
+        if ($_POST['action'] === 'reset') {
+            // Reset to initial state
+            $state = 'form';
+            $user_photo_path = '';
+            $jewelry_photo_path = '';
+            $tryon_photo_path = '';
+        } elseif ($_POST['action'] === 'upload') {
             // Handle photo upload stage
             if (!isset($_FILES['user_photo']) || !isset($_FILES['jewelry_photo'])) {
                 $error_message = 'Both user photo and jewelry photo are required.';
@@ -259,6 +265,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <input type="hidden" name="jewelry_photo_path" value="<?php echo htmlspecialchars($jewelry_photo_path); ?>">
                     <button type="submit">Try On Jewelry</button>
                 </form>
+                <form action="" method="POST" style="display: inline;">
+                    <input type="hidden" name="action" value="reset">
+                    <button type="submit">Start Over</button>
+                </form>
             </div>
         <?php elseif ($state === 'processed' && $tryon_photo_path): ?>
             <!-- Display all images and success message -->
@@ -276,6 +286,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <div class="bottom-section">
                 <div class="section-title">Try-On Result</div>
                 <img src="<?php echo htmlspecialchars($tryon_photo_path); ?>" alt="Try-On Result">
+            </div>
+            <div class="buttons-area">
+                <form action="" method="POST" style="display: inline;">
+                    <input type="hidden" name="action" value="reset">
+                    <button type="submit">Start Over</button>
+                </form>
             </div>
         <?php else: ?>
             <!-- Error state or unexpected condition -->
