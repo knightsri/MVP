@@ -69,17 +69,44 @@ function serve_secure_file($file_path) {
     // Validate file path to prevent directory traversal
     $real_path = realpath($file_path);
     $uploads_real_path = realpath(__DIR__ . '/uploads/');
-    
+
     // Check if file is within uploads directory
     if (!$real_path || strpos($real_path, $uploads_real_path) !== 0) {
         return null;
     }
-    
+
     if (!file_exists($real_path)) {
         return null;
     }
-    
+
     return $real_path;
+}
+
+// Function to sanitize and validate user-provided file paths
+function sanitize_file_path($posted_path, $uploads_dir) {
+    // Remove any null bytes or dangerous characters
+    $clean_path = str_replace(array("\0", "\r", "\n"), '', $posted_path);
+
+    // Get the filename (basename) to prevent directory traversal
+    $filename = basename($clean_path);
+
+    // Validate that filename doesn't contain dangerous sequences
+    if (strpos($filename, '..') !== false || strpos($filename, '/') !== false || strpos($filename, '\\') !== false) {
+        return null; // Invalid path
+    }
+
+    // Construct safe path within uploads directory
+    $safe_path = $uploads_dir . $filename;
+
+    // Validate the real path is within uploads directory
+    $real_path = realpath($safe_path);
+    $uploads_real_path = realpath(__DIR__ . '/' . dirname($uploads_dir));
+
+    if (!$real_path || strpos($real_path, $uploads_real_path) !== 0) {
+        return null;
+    }
+
+    return $safe_path;
 }
 
 // Handle secure file serving
@@ -172,10 +199,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         } elseif ($_POST['action'] === 'tryon') {
             // Handle try-on processing stage
-            $user_dest = isset($_POST['user_photo_path']) ? $_POST['user_photo_path'] : '';
-            $jewelry_dest = isset($_POST['jewelry_photo_path']) ? $_POST['jewelry_photo_path'] : '';
 
-            if (empty($user_dest) || empty($jewelry_dest) ||
+            // Sanitize and validate file paths from POST data
+            $user_dest = sanitize_file_path(isset($_POST['user_photo_path']) ? $_POST['user_photo_path'] : '', $uploads_dir);
+            $jewelry_dest = sanitize_file_path(isset($_POST['jewelry_photo_path']) ? $_POST['jewelry_photo_path'] : '', $uploads_dir);
+
+            // Check if paths are valid
+            if ($user_dest === null || $jewelry_dest === null) {
+                $error_message = 'Invalid file path detected.';
+                $state = 'form';
+            } elseif (empty($user_dest) || empty($jewelry_dest) ||
                 !file_exists($user_dest) || !file_exists($jewelry_dest)) {
                 $error_message = 'Photos not found. Please upload again.';
             } else {
