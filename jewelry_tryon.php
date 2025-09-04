@@ -67,9 +67,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
         } elseif ($_POST['action'] === 'tryon') {
-            // Add visual waiting class flag
-            $waiting = true;
-
             // Handle try-on processing stage
             $user_dest = isset($_POST['user_photo_path']) ? $_POST['user_photo_path'] : '';
             $jewelry_dest = isset($_POST['jewelry_photo_path']) ? $_POST['jewelry_photo_path'] : '';
@@ -138,7 +135,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             margin: 0;
             padding: 20px;
             background-color: #f5f5f5;
-            <?php if (isset($waiting)) { echo 'cursor: wait;'; } ?>
         }
         .container {
             max-width: 1000px;
@@ -221,14 +217,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             cursor: pointer;
             font-size: 16px;
             margin: 10px;
-            <?php if (isset($waiting)) { echo 'pointer-events: none; opacity: 0.6;'; } ?>
         }
         button:hover {
             background-color: #0056b3;
         }
-        .waiting {
-            cursor: wait !important;
-        }
+
         input[type="hidden"] {
             display: none;
         }
@@ -262,7 +255,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     </style>
 </head>
-<body class="<?php if (isset($waiting)) echo 'waiting'; ?>">
+<body>
     <div class="container">
         <h1>Jewelry Try-On Application</h1>
 
@@ -387,12 +380,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <button type="submit">Start Over</button>
                 </form>
             </div>
-        <?php elseif (isset($waiting)): ?>
-            <!-- Waiting for processing -->
-            <div class="processing">
-                <div class="spinner"></div>
-                <span>Processing... Please wait.</span>
-            </div>
+
         <?php else: ?>
             <!-- Error state or unexpected condition -->
             <div style="text-align: center; padding: 40px;">
