@@ -284,7 +284,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <div class="top-section">
                 <div class="image-box">
                     <div class="section-title">Your Photo</div>
-                    <img src="<?php echo htmlspecialchars($user_photo_path); ?>" alt="User Photo">
+                    <?php
+                    $user_web_path = str_replace('\\', '/', $user_photo_path);
+                    if (file_exists($user_photo_path) && filesize($user_photo_path) > 0) {
+                        echo '<img src="' . htmlspecialchars($user_web_path) . '" alt="User Photo">';
+                    } else {
+                        echo '<div style="width: 100%; height: 300px; background: #f0f0f0; display: flex; align-items: center; justify-content: center; color: #666;">Image not found</div>';
+                    }
+                    ?>
                     <div class="pin-control">
                         <label for="pin_user">
                             <input type="checkbox" id="pin_user" name="pin_user" <?php if ($pin_user) echo 'checked'; ?>> PIN
@@ -293,7 +300,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
                 <div class="image-box">
                     <div class="section-title">Jewelry Photo</div>
-                    <img src="<?php echo htmlspecialchars($jewelry_photo_path); ?>" alt="Jewelry Photo">
+                    <?php
+                    $jewelry_web_path = str_replace('\\', '/', $jewelry_photo_path);
+                    if (file_exists($jewelry_photo_path) && filesize($jewelry_photo_path) > 0) {
+                        echo '<img src="' . htmlspecialchars($jewelry_web_path) . '" alt="Jewelry Photo">';
+                    } else {
+                        echo '<div style="width: 100%; height: 300px; background: #f0f0f0; display: flex; align-items: center; justify-content: center; color: #666;">Image not found</div>';
+                    }
+                    ?>
                     <div class="pin-control">
                         <label for="pin_jewelry">
                             <input type="checkbox" id="pin_jewelry" name="pin_jewelry" <?php if ($pin_jewelry) echo 'checked'; ?>> PIN
@@ -323,7 +337,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <div class="top-section">
                 <div class="image-box">
                     <div class="section-title">Your Photo</div>
-                    <img src="<?php echo htmlspecialchars($user_photo_path); ?>" alt="User Photo">
+                    <?php
+                    $user_web_path = str_replace('\\', '/', $user_photo_path);
+                    if (file_exists($user_photo_path) && filesize($user_photo_path) > 0) {
+                        echo '<img src="' . htmlspecialchars($user_web_path) . '" alt="User Photo">';
+                    } else {
+                        echo '<div style="width: 100%; height: 300px; background: #f0f0f0; display: flex; align-items: center; justify-content: center; color: #666;">Image not found</div>';
+                    }
+                    ?>
                     <div class="pin-control">
                         <label for="pin_user">
                             <input type="checkbox" id="pin_user" name="pin_user" <?php if ($pin_user) echo 'checked'; ?>> PIN
@@ -332,7 +353,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
                 <div class="image-box">
                     <div class="section-title">Jewelry Photo</div>
-                    <img src="<?php echo htmlspecialchars($jewelry_photo_path); ?>" alt="Jewelry Photo">
+                    <?php
+                    $jewelry_web_path = str_replace('\\', '/', $jewelry_photo_path);
+                    if (file_exists($jewelry_photo_path) && filesize($jewelry_photo_path) > 0) {
+                        echo '<img src="' . htmlspecialchars($jewelry_web_path) . '" alt="Jewelry Photo">';
+                    } else {
+                        echo '<div style="width: 100%; height: 300px; background: #f0f0f0; display: flex; align-items: center; justify-content: center; color: #666;">Image not found</div>';
+                    }
+                    ?>
                     <div class="pin-control">
                         <label for="pin_jewelry">
                             <input type="checkbox" id="pin_jewelry" name="pin_jewelry" <?php if ($pin_jewelry) echo 'checked'; ?>> PIN
@@ -342,7 +370,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
             <div class="bottom-section">
                 <div class="section-title">Try-On Result</div>
-                <img src="<?php echo htmlspecialchars($tryon_photo_path); ?>" alt="Try-On Result">
+                <?php
+                $tryon_web_path = str_replace('\\', '/', $tryon_photo_path);
+                if (file_exists($tryon_photo_path) && filesize($tryon_photo_path) > 0) {
+                    echo '<img src="' . htmlspecialchars($tryon_web_path) . '" alt="Try-On Result">';
+                } else {
+                    echo '<div style="width: 100%; height: 200px; background: #f0f0f0; display: flex; align-items: center; justify-content: center; color: #666;">Try-on result not found</div>';
+                }
+                ?>
             </div>
             <div class="buttons-area">
                 <form action="" method="POST" style="display: inline;">
