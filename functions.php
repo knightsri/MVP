@@ -941,38 +941,57 @@ function validate_uploaded_files($files) {
  * Try-on result caching functions
  */
 
-// Function to generate cache filename for try-on results
-function generate_cache_filename($user_photo_path, $jewelry_photo_path) {
+// Function to generate content-based cache filename for try-on results
+function generate_content_based_cache_filename($user_photo_path, $jewelry_photo_path) {
     global $config;
 
-    // Extract base names without extensions
-    $user_base = pathinfo($user_photo_path, PATHINFO_FILENAME);
-    $jewelry_base = pathinfo($jewelry_photo_path, PATHINFO_FILENAME);
+    // Get MD5 hash of file contents for content-based identification
+    $user_hash = @md5_file($user_photo_path);
+    $jewelry_hash = @md5_file($jewelry_photo_path);
 
-    // Format: userphoto-jewelryphoto.png
-    $cache_filename = $user_base . '-' . $jewelry_base . '.png';
+    if (!$user_hash || !$jewelry_hash) {
+        log_error("Failed to generate content hash for caching", 'CACHE', 'ERROR');
+        return false;
+    }
+
+    // Format: hash_user-hash_jewelry.png (content-based, not filename-based)
+    $cache_filename = $user_hash . '-' . $jewelry_hash . '.png';
 
     return $config['uploads']['results_directory'] . $cache_filename;
 }
 
-// Function to check if cached result exists
+// Function to check if cached result exists (content-based)
 function check_cached_result($user_photo_path, $jewelry_photo_path) {
-    $cached_file_path = generate_cache_filename($user_photo_path, $jewelry_photo_path);
+    $cached_file_path = generate_content_based_cache_filename($user_photo_path, $jewelry_photo_path);
 
-    if (file_exists($cached_file_path) && filesize($cached_file_path) > 0) {
-        log_error("Cached result found: $cached_file_path", 'CACHE', 'INFO');
+    if ($cached_file_path && file_exists($cached_file_path) && filesize($cached_file_path) > 0) {
+        log_error("CACHE_HIT: Cached result found for content combination: $cached_file_path", 'CACHE', 'INFO');
         return $cached_file_path;
     }
 
-    log_error("No cached result found for combination", 'CACHE', 'INFO');
+    log_error("CACHE_MISS: No cached result found for content combination", 'CACHE', 'INFO');
     return false;
 }
 
-// Function to save result to cache
+// Function to save result to cache (content-based)
 function save_to_cache($user_photo_path, $jewelry_photo_path, $result_data) {
     global $config;
 
-    $cached_file_path = generate_cache_filename($user_photo_path, $jewelry_photo_path);
+    $cached_file_path = generate_content_based_cache_filename($user_photo_path, $jewelry_photo_path);
+
+    if (!$cached_file_path) {
+        log_error("Failed to generate cache filename for saving", 'CACHE', 'ERROR');
+        return false;
+    }
+
+    // Create results directory if it doesn't exist
+    $results_dir = dirname($cached_file_path);
+    if (!is_dir($results_dir)) {
+        if (!mkdir($results_dir, 0755, true)) {
+            log_error("Failed to create results directory: $results_dir", 'CACHE', 'ERROR');
+            return false;
+        }
+    }
 
     if (file_put_contents($cached_file_path, $result_data) === false) {
         log_error("Failed to save result to cache: $cached_file_path", 'CACHE', 'ERROR');
@@ -980,8 +999,21 @@ function save_to_cache($user_photo_path, $jewelry_photo_path, $result_data) {
     }
 
     @chmod($cached_file_path, $config['uploads']['file_permissions']);
-    log_error("Result saved to cache: $cached_file_path", 'CACHE', 'INFO');
+    log_error("CACHE_SAVE: Result saved to cache: $cached_file_path", 'CACHE', 'INFO');
     return $cached_file_path;
+}
+
+// Legacy function for backward compatibility (filename-based)
+function generate_cache_filename($user_photo_path, $jewelry_photo_path) {
+    // Log deprecation warning
+    log_error("generate_cache_filename() is deprecated - use content-based caching instead", 'CACHE', 'WARNING');
+
+    global $config;
+    $user_base = pathinfo($user_photo_path, PATHINFO_FILENAME);
+    $jewelry_base = pathinfo($jewelry_photo_path, PATHINFO_FILENAME);
+    $cache_filename = $user_base . '-' . $jewelry_base . '.png';
+
+    return $config['uploads']['results_directory'] . $cache_filename;
 }
 
 /**
