@@ -69,14 +69,14 @@ try {
     // Initialize session state securely
     $session_state = initialize_session_state();
 
-    // Initialize variables with validation
-    $state = STATE_FORM;
-    $user_photo_path = '';
-    $jewelry_photo_path = '';
-    $tryon_photo_path = '';
-    $pin_user = false;
-    $pin_jewelry = false;
-    $error_message = '';
+    // Initialize variables from session state
+    $state = get_session_state('state', STATE_FORM);
+    $user_photo_path = get_session_state('user_photo_path', '');
+    $jewelry_photo_path = get_session_state('jewelry_photo_path', '');
+    $tryon_photo_path = get_session_state('tryon_photo_path', '');
+    $pin_user = get_session_state('pin_user', false);
+    $pin_jewelry = get_session_state('pin_jewelry', false);
+    $error_message = get_session_state('error_message', '');
 
     // Handle form submissions with comprehensive validation
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -105,6 +105,15 @@ try {
                 $pin_user = validate_pin_state($postData['pin_user'] ?? '', 'RESET') === PIN_STATE_ON;
                 $pin_jewelry = validate_pin_state($postData['pin_jewelry'] ?? '', 'RESET') === PIN_STATE_ON;
 
+                // Validate pinned photos still exist
+                $pin_validation = validate_pinned_photos($user_photo_path, $jewelry_photo_path, $pin_user, $pin_jewelry);
+                if (!$pin_validation['valid']) {
+                    log_error("Reset: Pinned photos validation failed: " . implode(', ', $pin_validation['errors']), 'RESET', 'WARNING');
+                    // Clear invalid pinned photos
+                    $pin_user = false;
+                    $pin_jewelry = false;
+                }
+
                 // Reset to initial state, but respect pinned photos
                 $state = STATE_FORM;
                 if (!$pin_user) {
@@ -117,86 +126,89 @@ try {
 
             } elseif ($action === ACTION_UPLOAD) {
                 log_error("jewelry_tryon.php: Handling ACTION_UPLOAD. Raw FILES: " . print_r($_FILES, true), 'UPLOAD', 'INFO');
-                // Handle photo upload with comprehensive validation
-                if (!validate_uploaded_files($_FILES)) {
-                     log_error("jewelry_tryon.php: validate_uploaded_files failed.", 'UPLOAD', 'ERROR');
-                    throw new Exception('Both user photo and jewelry photo files are required');
+                
+                // Handle photo upload with PIN state consideration
+                if (!validate_uploaded_files_with_pins($_FILES, $pin_user, $pin_jewelry)) {
+                     log_error("jewelry_tryon.php: validate_uploaded_files_with_pins failed.", 'UPLOAD', 'ERROR');
+                    throw new Exception('Required photo files are missing');
                 }
 
-                $user_photo = $_FILES['user_photo'];
-                $jewelry_photo = $_FILES['jewelry_photo'];
+                // Handle user photo upload (if not pinned)
+                if (!$pin_user && isset($_FILES['user_photo']) && $_FILES['user_photo']['error'] === UPLOAD_ERR_OK) {
+                    $user_photo = $_FILES['user_photo'];
+                    log_error("jewelry_tryon.php: Processing new user photo upload", 'UPLOAD', 'INFO');
 
-                log_error("jewelry_tryon.php: user_photo temp: " . ($user_photo['tmp_name'] ?? 'N/A') . ", jewelry_photo temp: " . ($jewelry_photo['tmp_name'] ?? 'N/A'), 'UPLOAD', 'INFO');
+                    // Validate user photo
+                    $user_validation = validate_file_upload($user_photo);
+                    if (!$user_validation['valid']) {
+                        throw new Exception('User photo validation failed: ' . $user_validation['error']);
+                    }
 
-                // Validate user photo
-                $user_validation = validate_file_upload($user_photo);
-                if (!$user_validation['valid']) {
-                    throw new Exception('User photo validation failed: ' . $user_validation['error']);
+                    // Generate secure filename and save
+                    $user_filename = generate_random_filename($user_photo['name']);
+                    $user_dest = $config['uploads']['directory'] . $user_filename;
+
+                    log_error("jewelry_tryon.php: Moving uploaded user photo from {$user_photo['tmp_name']} to {$user_dest}", 'UPLOAD', 'INFO');
+                    if (!move_uploaded_file($user_photo['tmp_name'], $user_dest)) {
+                        log_error("jewelry_tryon.php: Failed to save user photo: {$user_photo['tmp_name']} to {$user_dest}", 'UPLOAD', 'ERROR');
+                        throw new Exception('Failed to save user photo');
+                    }
+
+                    // Set permissions and optimize
+                    @chmod($user_dest, $config['uploads']['file_permissions']);
+                    $user_optimization = optimize_image($user_dest, $user_filename);
+                    if (!$user_optimization) {
+                        log_error("User photo optimization failed but upload succeeded: $user_filename", 'UPLOAD', 'WARNING');
+                    }
+
+                    $user_photo_path = $user_dest;
+                    error_log("jewelry_tryon.php: User photo saved to: {$user_dest}. Current memory: " . memory_get_usage(), E_USER_NOTICE);
                 }
 
-                // Validate jewelry photo
-                $jewelry_validation = validate_file_upload($jewelry_photo);
-                if (!$jewelry_validation['valid']) {
-                    throw new Exception('Jewelry photo validation failed: ' . $jewelry_validation['error']);
+                // Handle jewelry photo upload (if not pinned)
+                if (!$pin_jewelry && isset($_FILES['jewelry_photo']) && $_FILES['jewelry_photo']['error'] === UPLOAD_ERR_OK) {
+                    $jewelry_photo = $_FILES['jewelry_photo'];
+                    log_error("jewelry_tryon.php: Processing new jewelry photo upload", 'UPLOAD', 'INFO');
+
+                    // Validate jewelry photo
+                    $jewelry_validation = validate_file_upload($jewelry_photo);
+                    if (!$jewelry_validation['valid']) {
+                        throw new Exception('Jewelry photo validation failed: ' . $jewelry_validation['error']);
+                    }
+
+                    // Generate secure filename and save
+                    $jewelry_filename = generate_random_filename($jewelry_photo['name']);
+                    $jewelry_dest = $config['uploads']['directory'] . $jewelry_filename;
+
+                    log_error("jewelry_tryon.php: Moving uploaded jewelry photo from {$jewelry_photo['tmp_name']} to {$jewelry_dest}", 'UPLOAD', 'INFO');
+                    if (!move_uploaded_file($jewelry_photo['tmp_name'], $jewelry_dest)) {
+                        log_error("jewelry_tryon.php: Failed to save jewelry photo: {$jewelry_photo['tmp_name']} to {$jewelry_dest}", 'UPLOAD', 'ERROR');
+                        throw new Exception('Failed to save jewelry photo');
+                    }
+
+                    // Set permissions and optimize
+                    @chmod($jewelry_dest, $config['uploads']['file_permissions']);
+                    $jewelry_optimization = optimize_image($jewelry_dest, $jewelry_filename);
+                    if (!$jewelry_optimization) {
+                        log_error("Jewelry photo optimization failed but upload succeeded: $jewelry_filename", 'UPLOAD', 'WARNING');
+                    }
+
+                    $jewelry_photo_path = $jewelry_dest;
+                    error_log("jewelry_tryon.php: Jewelry photo saved to: {$jewelry_dest}. Current memory: " . memory_get_usage(), E_USER_NOTICE);
                 }
 
-                // Generate secure filenames
-                $user_filename = generate_random_filename($user_photo['name']);
-                $jewelry_filename = generate_random_filename($jewelry_photo['name']);
-
-                // Construct safe file paths
-                $user_dest = $config['uploads']['directory'] . $user_filename;
-                $jewelry_dest = $config['uploads']['directory'] . $jewelry_filename;
-
-                log_error("jewelry_tryon.php: Moving uploaded user photo from {$user_photo['tmp_name']} to {$user_dest}", 'UPLOAD', 'INFO');
-                // Move uploaded files with error handling
-                if (!move_uploaded_file($user_photo['tmp_name'], $user_dest)) {
-                    log_error("jewelry_tryon.php: Failed to save user photo: {$user_photo['tmp_name']} to {$user_dest}", 'UPLOAD', 'ERROR');
-                    throw new Exception('Failed to save user photo');
-                }
-                error_log("jewelry_tryon.php: User photo saved to: {$user_dest}. Current memory: " . memory_get_usage() . " Peak memory: " . memory_get_peak_usage(), E_USER_NOTICE);
-
-                log_error("jewelry_tryon.php: Moving uploaded jewelry photo from {$jewelry_photo['tmp_name']} to {$jewelry_dest}", 'UPLOAD', 'INFO');
-                if (!move_uploaded_file($jewelry_photo['tmp_name'], $jewelry_dest)) {
-                    // Clean up the first file if second fails
-                    log_error("jewelry_tryon.php: Failed to save jewelry photo: {$jewelry_photo['tmp_name']} to {$jewelry_dest}", 'UPLOAD', 'ERROR');
-                    @unlink($user_dest);
-                    throw new Exception('Failed to save jewelry photo');
-                }
-                 error_log("jewelry_tryon.php: Jewelry photo saved to: {$jewelry_dest}. Current memory: " . memory_get_usage() . " Peak memory: " . memory_get_peak_usage(), E_USER_NOTICE);
-
-                // Set secure permissions
-                @chmod($user_dest, $config['uploads']['file_permissions']);
-                @chmod($jewelry_dest, $config['uploads']['file_permissions']);
-
-                // Optimize uploaded images for better performance
-                error_log("jewelry_tryon.php: Starting image optimization. Current memory: " . memory_get_usage() . " Peak memory: " . memory_get_peak_usage(), E_USER_NOTICE);
-                $user_optimization = optimize_image($user_dest, $user_filename);
-                $jewelry_optimization = optimize_image($jewelry_dest, $jewelry_filename);
-                error_log("jewelry_tryon.php: Image optimization completed. Current memory: " . memory_get_usage() . " Peak memory: " . memory_get_peak_usage(), E_USER_NOTICE);
-
-                if (!$user_optimization) {
-                    log_error("User photo optimization failed but upload succeeded: $user_filename", 'UPLOAD', 'WARNING');
-                }
-
-                if (!$jewelry_optimization) {
-                    log_error("Jewelry photo optimization failed but upload succeeded: $jewelry_filename", 'UPLOAD', 'WARNING');
-                }
-
-                // Get final image stats for logging
-                $user_stats = get_image_stats($user_dest);
-                $jewelry_stats = get_image_stats($jewelry_dest);
-
+                // Log final image stats
+                $user_stats = get_image_stats($user_photo_path);
+                $jewelry_stats = get_image_stats($jewelry_photo_path);
                 if ($user_stats && $jewelry_stats) {
-                    log_error("Optimized images - User: {$user_stats['width']}x{$user_stats['height']} ({$user_stats['size_human']}), Jewelry: {$jewelry_stats['width']}x{$jewelry_stats['height']} ({$jewelry_stats['size_human']})", 'UPLOAD', 'INFO');
+                    log_error("Final images - User: {$user_stats['width']}x{$user_stats['height']} ({$user_stats['size_human']}), Jewelry: {$jewelry_stats['width']}x{$jewelry_stats['height']} ({$jewelry_stats['size_human']})", 'UPLOAD', 'INFO');
                 }
 
-                // Update session state
+                // Update state
                 $state = STATE_UPLOADED;
-                $user_photo_path = $user_dest;
-                $jewelry_photo_path = $jewelry_dest;
+                $tryon_photo_path = ''; // Clear any previous try-on result
 
-                error_log("File upload and optimization successful: user=$user_filename, jewelry=$jewelry_filename. Current memory: " . memory_get_usage() . " Peak memory: " . memory_get_peak_usage(), E_USER_NOTICE);
+                error_log("File upload completed successfully. Current memory: " . memory_get_usage() . " Peak memory: " . memory_get_peak_usage(), E_USER_NOTICE);
 
             } elseif ($action === ACTION_TRYON) {
                 error_log("jewelry_tryon.php: Handling ACTION_TRYON. Current memory: " . memory_get_usage() . " Peak memory: " . memory_get_peak_usage(), E_USER_NOTICE);
@@ -255,23 +267,41 @@ try {
                 log_error("Try-on processing successful: $tryon_filename", 'PROCESSING', 'INFO');
             }
 
+            // Save all state changes to session
+            update_session_state('state', $state);
+            update_session_state('user_photo_path', $user_photo_path);
+            update_session_state('jewelry_photo_path', $jewelry_photo_path);
+            update_session_state('tryon_photo_path', $tryon_photo_path);
+            update_session_state('pin_user', $pin_user);
+            update_session_state('pin_jewelry', $pin_jewelry);
+            update_session_state('error_message', ''); // Clear any previous errors
+
+            log_error("Session state saved after {$action} action", 'SESSION', 'INFO');
+
         } catch (Exception $e) {
             error_log("jewelry_tryon.php: Exception caught in POST handling: " . $e->getMessage() . " on line " . $e->getLine() . " in " . $e->getFile());
             $error_message = handle_exception($e, 'FORM_PROCESSING');
             $state = STATE_FORM; // Reset to form on error
+            
+            // Save error state to session
+            update_session_state('state', $state);
+            update_session_state('error_message', $error_message);
         }
 
     } else {
-        // GET request - clear pin states for new session
-        error_log("jewelry_tryon.php: GET request detected. Clearing pin states.");
-        $pin_user = false;
-        $pin_jewelry = false;
+        // GET request - maintain existing session state, only clear error messages
+        error_log("jewelry_tryon.php: GET request detected. Maintaining session state.");
+        update_session_state('error_message', '');
     }
 
 } catch (Exception $e) {
     error_log("jewelry_tryon.php: Main exception caught: " . $e->getMessage() . " on line " . $e->getLine() . " in " . $e->getFile());
     $error_message = handle_exception($e, 'MAIN_PROCESSING');
     $state = STATE_FORM;
+    
+    // Save error state to session
+    update_session_state('state', $state);
+    update_session_state('error_message', $error_message);
 }
 
 error_log("jewelry_tryon.php: Script execution ending. Rendering template. Final memory: " . memory_get_usage() . " Peak memory: " . memory_get_peak_usage(), E_USER_NOTICE);

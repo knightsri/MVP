@@ -761,16 +761,62 @@ function call_webhook($user_photo_path, $jewelry_photo_path) {
 
 // Function to initialize session state securely
 function initialize_session_state() {
-    return [
-        'state' => STATE_FORM,
-        'user_photo_path' => '',
-        'jewelry_photo_path' => '',
-        'tryon_photo_path' => '',
-        'pin_user' => false,
-        'pin_jewelry' => false,
-        'error_message' => '',
-        'last_activity' => time()
-    ];
+    // Start session if not already started
+    if (session_status() == PHP_SESSION_NONE) {
+        session_start();
+    }
+    
+    // Initialize session variables if not set
+    if (!isset($_SESSION['jewelry_app'])) {
+        $_SESSION['jewelry_app'] = [
+            'state' => STATE_FORM,
+            'user_photo_path' => '',
+            'jewelry_photo_path' => '',
+            'tryon_photo_path' => '',
+            'pin_user' => false,
+            'pin_jewelry' => false,
+            'error_message' => '',
+            'last_activity' => time()
+        ];
+    }
+    
+    return $_SESSION['jewelry_app'];
+}
+
+// Function to update session state
+function update_session_state($key, $value) {
+    if (session_status() == PHP_SESSION_NONE) {
+        session_start();
+    }
+    
+    if (!isset($_SESSION['jewelry_app'])) {
+        initialize_session_state();
+    }
+    
+    $_SESSION['jewelry_app'][$key] = $value;
+    $_SESSION['jewelry_app']['last_activity'] = time();
+}
+
+// Function to get session state value
+function get_session_state($key, $default = null) {
+    if (session_status() == PHP_SESSION_NONE) {
+        session_start();
+    }
+    
+    if (!isset($_SESSION['jewelry_app'])) {
+        initialize_session_state();
+    }
+    
+    return $_SESSION['jewelry_app'][$key] ?? $default;
+}
+
+// Function to clear session state (for complete reset)
+function clear_session_state() {
+    if (session_status() == PHP_SESSION_NONE) {
+        session_start();
+    }
+    
+    unset($_SESSION['jewelry_app']);
 }
 
 // Function to validate and sanitize POST data
@@ -792,6 +838,42 @@ function validate_uploaded_files($files) {
 
     return isset($files['user_photo']) && isset($files['jewelry_photo']) &&
            is_array($files['user_photo']) && is_array($files['jewelry_photo']);
+}
+
+// Function to validate uploaded files with PIN state consideration
+function validate_uploaded_files_with_pins($files, $pin_user, $pin_jewelry) {
+    if (!is_array($files)) {
+        return false;
+    }
+
+    // Check if we have user photo when needed (not pinned)
+    $user_valid = $pin_user || (isset($files['user_photo']) && 
+                                is_array($files['user_photo']) && 
+                                $files['user_photo']['error'] === UPLOAD_ERR_OK);
+
+    // Check if we have jewelry photo when needed (not pinned)  
+    $jewelry_valid = $pin_jewelry || (isset($files['jewelry_photo']) && 
+                                     is_array($files['jewelry_photo']) && 
+                                     $files['jewelry_photo']['error'] === UPLOAD_ERR_OK);
+
+    return $user_valid && $jewelry_valid;
+}
+
+// Function to validate that pinned photos still exist
+function validate_pinned_photos($user_photo_path, $jewelry_photo_path, $pin_user, $pin_jewelry) {
+    $errors = [];
+    
+    if ($pin_user && (!empty($user_photo_path) && !file_exists($user_photo_path))) {
+        $errors[] = 'Pinned user photo no longer exists';
+        log_error("Pinned user photo missing: $user_photo_path", 'PIN_VALIDATION', 'WARNING');
+    }
+    
+    if ($pin_jewelry && (!empty($jewelry_photo_path) && !file_exists($jewelry_photo_path))) {
+        $errors[] = 'Pinned jewelry photo no longer exists';
+        log_error("Pinned jewelry photo missing: $jewelry_photo_path", 'PIN_VALIDATION', 'WARNING');
+    }
+    
+    return empty($errors) ? ['valid' => true] : ['valid' => false, 'errors' => $errors];
 }
 
 // Helper function for memory logging
