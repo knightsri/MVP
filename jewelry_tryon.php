@@ -8,15 +8,17 @@ if (defined('DEBUG_ENABLED') && DEBUG_ENABLED) {
     ini_set('display_startup_errors', 1);
     error_reporting(E_ALL);
 
-    // Ensure errors are logged to a specific file, useful if system logs aren't accessible
+    // Ensure errors are logged to the common error log file
     ini_set('log_errors', 1);
-    ini_set('error_log', DEBUG_FILE); // Use the debug file defined in config.php
-    error_log("jewelry_tryon.php: Script execution started. Debug logging enabled."); // General debug log for early issues
+    ini_set('error_log', ERROR_LOG_FILE); // Use the common error log file
+    error_log("jewelry_tryon.php: Script execution started. Debug logging enabled and directed to " . ERROR_LOG_FILE); // General debug log for early issues
 } else {
-    // Optionally disable display errors in production if DEBUG_ENABLED is false
+    // Disable display errors in production if DEBUG_ENABLED is false
     ini_set('display_errors', 0);
     ini_set('display_startup_errors', 0);
-    error_reporting(E_ALL); // Still log all errors, but don't display
+    error_reporting(E_ALL); // Still report all errors, but don't display
+    ini_set('log_errors', 1); // Ensure logging is still enabled
+    ini_set('error_log', ERROR_LOG_FILE); // Direct to the common error log file
 }
 
 require_once 'functions.php';

@@ -669,15 +669,21 @@ function call_webhook($user_photo_path, $jewelry_photo_path) {
         $ch = curl_init();
 
         if (!$ch) {
+            log_error("Failed to initialize cURL handle.", 'WEBHOOK_CALL', 'ERROR');
             throw new Exception('Failed to initialize cURL');
         }
 
-        curl_setopt($ch, CURLOPT_URL, $config['webhook']['url']);
+        $webhook_url = $config['webhook']['url'];
+        log_error("Attempting webhook call to URL: " . $webhook_url, 'WEBHOOK_CALL', 'INFO');
+
+        curl_setopt($ch, CURLOPT_URL, $webhook_url);
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_TIMEOUT, $config['webhook']['timeout']);
         curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+
+        log_error("cURL options set. Timeout: " . $config['webhook']['timeout'] . "s", 'WEBHOOK_CALL', 'INFO');
 
         // Prepare multipart data with files and text prompt
         $user_filename = basename($user_path);
@@ -713,18 +719,25 @@ function call_webhook($user_photo_path, $jewelry_photo_path) {
         if ($response === false) {
             $curl_error = curl_error($ch);
             $curl_errno = curl_errno($ch);
+            log_error("cURL_exec failed. Error No: {$curl_errno}, Error: {$curl_error}", 'WEBHOOK_CALL', 'ERROR');
             curl_close($ch);
             throw new Exception("cURL error [{$curl_errno}]: {$curl_error}");
         }
 
         $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $request_info = curl_getinfo($ch); // Get all info for detailed logging
         curl_close($ch);
 
+        log_error("cURL request completed. HTTP Code: {$http_code}. Request Info: " . print_r($request_info, true), 'WEBHOOK_CALL', 'INFO');
+        log_error("cURL Response Body (first 500 chars): " . substr($response, 0, 500), 'WEBHOOK_CALL', 'INFO');
+
+
         if ($http_code !== 200) {
+            log_error("Webhook returned non-200 HTTP status: {$http_code}", 'WEBHOOK_CALL', 'ERROR');
             throw new Exception("HTTP error: {$http_code}");
         }
 
-        log_error("Webhook call successful", 'WEBHOOK', 'INFO');
+        log_error("Webhook call successful (HTTP 200)", 'WEBHOOK', 'INFO');
 
         return [
             'success' => true,

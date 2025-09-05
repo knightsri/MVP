@@ -62,13 +62,11 @@ define('IMAGE_BACKUP_ORIGINAL', true);
 
 // Debugging configuration
 define('DEBUG_ENABLED', true); // Set to true to enable forced debug logging
-define('DEBUG_FILE', '/full/path/to/php_error_debug.log'); // Full path to the forced debug log file
 
 // Create required directories
 $required_dirs = [
     $config['uploads']['directory'],
-    dirname(ERROR_LOG_FILE),
-    dirname(DEBUG_FILE) // Ensure debug log directory is also created
+    dirname(ERROR_LOG_FILE)
 ];
 
 foreach ($required_dirs as $dir) {
