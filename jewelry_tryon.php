@@ -1,4 +1,7 @@
 <?php
+// Disable time limit for debugging purposes during troubleshooting
+set_time_limit(0);
+
 // Include configuration first to define constants, including debug settings
 require_once 'config.php';
 
@@ -11,7 +14,7 @@ if (defined('DEBUG_ENABLED') && DEBUG_ENABLED) {
     // Ensure errors are logged to the common error log file
     ini_set('log_errors', 1);
     ini_set('error_log', ERROR_LOG_FILE); // Use the common error log file
-    error_log("jewelry_tryon.php: Script execution started. Debug logging enabled and directed to " . ERROR_LOG_FILE); // General debug log for early issues
+    error_log("jewelry_tryon.php: Script execution started. Debug logging enabled and directed to " . ERROR_LOG_FILE . " Current memory: " . memory_get_usage() . " Peak memory: " . memory_get_peak_usage(), E_USER_NOTICE); // General debug log for early issues
 } else {
     // Disable display errors in production if DEBUG_ENABLED is false
     ini_set('display_errors', 0);
@@ -24,11 +27,11 @@ if (defined('DEBUG_ENABLED') && DEBUG_ENABLED) {
 require_once 'functions.php';
 
 try {
-    error_log("jewelry_tryon.php: Starting request handling."); // General debug log
+    error_log("jewelry_tryon.php: Starting request handling. Current memory: " . memory_get_usage() . " Peak memory: " . memory_get_peak_usage(), E_USER_NOTICE); // General debug log
 
     // Handle secure file serving with validation
     if (isset($_GET['file'])) {
-        error_log("jewelry_tryon.php: GET request for file serving detected.");
+        error_log("jewelry_tryon.php: GET request for file serving detected. Current memory: " . memory_get_usage(), E_USER_NOTICE);
         $file_param = sanitize_string($_GET['file'], 'FILE_SERVING', $config['validation']['max_filename_length']);
 
         if (!empty($file_param)) {
@@ -151,7 +154,7 @@ try {
                     log_error("jewelry_tryon.php: Failed to save user photo: {$user_photo['tmp_name']} to {$user_dest}", 'UPLOAD', 'ERROR');
                     throw new Exception('Failed to save user photo');
                 }
-                log_error("jewelry_tryon.php: User photo saved to: {$user_dest}", 'UPLOAD', 'INFO');
+                error_log("jewelry_tryon.php: User photo saved to: {$user_dest}. Current memory: " . memory_get_usage() . " Peak memory: " . memory_get_peak_usage(), E_USER_NOTICE);
 
                 log_error("jewelry_tryon.php: Moving uploaded jewelry photo from {$jewelry_photo['tmp_name']} to {$jewelry_dest}", 'UPLOAD', 'INFO');
                 if (!move_uploaded_file($jewelry_photo['tmp_name'], $jewelry_dest)) {
@@ -160,15 +163,17 @@ try {
                     @unlink($user_dest);
                     throw new Exception('Failed to save jewelry photo');
                 }
-                 log_error("jewelry_tryon.php: Jewelry photo saved to: {$jewelry_dest}", 'UPLOAD', 'INFO');
+                 error_log("jewelry_tryon.php: Jewelry photo saved to: {$jewelry_dest}. Current memory: " . memory_get_usage() . " Peak memory: " . memory_get_peak_usage(), E_USER_NOTICE);
 
                 // Set secure permissions
                 @chmod($user_dest, $config['uploads']['file_permissions']);
                 @chmod($jewelry_dest, $config['uploads']['file_permissions']);
 
                 // Optimize uploaded images for better performance
+                error_log("jewelry_tryon.php: Starting image optimization. Current memory: " . memory_get_usage() . " Peak memory: " . memory_get_peak_usage(), E_USER_NOTICE);
                 $user_optimization = optimize_image($user_dest, $user_filename);
                 $jewelry_optimization = optimize_image($jewelry_dest, $jewelry_filename);
+                error_log("jewelry_tryon.php: Image optimization completed. Current memory: " . memory_get_usage() . " Peak memory: " . memory_get_peak_usage(), E_USER_NOTICE);
 
                 if (!$user_optimization) {
                     log_error("User photo optimization failed but upload succeeded: $user_filename", 'UPLOAD', 'WARNING');
@@ -191,10 +196,10 @@ try {
                 $user_photo_path = $user_dest;
                 $jewelry_photo_path = $jewelry_dest;
 
-                log_error("File upload and optimization successful: user=$user_filename, jewelry=$jewelry_filename", 'UPLOAD', 'INFO');
+                error_log("File upload and optimization successful: user=$user_filename, jewelry=$jewelry_filename. Current memory: " . memory_get_usage() . " Peak memory: " . memory_get_peak_usage(), E_USER_NOTICE);
 
             } elseif ($action === ACTION_TRYON) {
-                log_error("jewelry_tryon.php: Handling ACTION_TRYON.", 'PROCESSING', 'INFO');
+                error_log("jewelry_tryon.php: Handling ACTION_TRYON. Current memory: " . memory_get_usage() . " Peak memory: " . memory_get_peak_usage(), E_USER_NOTICE);
                 // Handle try-on processing with validation
                 $pin_user = validate_pin_state($postData['pin_user'] ?? '', 'TRYON') === PIN_STATE_ON;
                 $pin_jewelry = validate_pin_state($postData['pin_jewelry'] ?? '', 'TRYON') === PIN_STATE_ON;
@@ -265,7 +270,7 @@ try {
     $state = STATE_FORM;
 }
 
-error_log("jewelry_tryon.php: Script execution ending. Rendering template.");
+error_log("jewelry_tryon.php: Script execution ending. Rendering template. Final memory: " . memory_get_usage() . " Peak memory: " . memory_get_peak_usage(), E_USER_NOTICE);
 // Include the template to display the HTML
 require_once 'template.php';
 ?>
