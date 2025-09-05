@@ -180,7 +180,9 @@ function generate_random_filename($original_name, $prefix = '') {
     }
 
     // Generate secure random filename with timestamp
-    $timestamp = microtime(true);
+    // Use integer seconds for timestamp to avoid float-to-int conversion warning
+    // Use integer seconds for timestamp to avoid float-to-int conversion warning
+    $timestamp = time();
     $random = bin2hex(random_bytes(8));
 
     // Use prefix if provided, otherwise default to 'img_'
@@ -236,7 +238,10 @@ function get_photos_by_prefix($prefix) {
 
     // Sort photos by modification time (newest first)
     usort($photos, function($a, $b) use ($uploads_dir) {
-        return filemtime($uploads_dir . $b) - filemtime($uploads_dir . $a);
+        $timeA = filemtime($uploads_dir . $a);
+        $timeB = filemtime($uploads_dir . $b);
+        // Ensure integer comparison
+        return $timeB <=> $timeA;
     });
 
     log_error("Found " . count($photos) . " photos with prefix '$prefix'", 'PHOTO_LISTING', 'INFO');
