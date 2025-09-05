@@ -133,22 +133,22 @@
                 <div class="image-box">
                     <div class="section-title">Your Photo</div>
                     <?php
-                    if (file_exists($user_photo_path) && filesize($user_photo_path) > 0) {
+                    if (!empty($user_photo_path) && file_exists($user_photo_path) && filesize($user_photo_path) > 0) {
                         $user_filename = basename($user_photo_path);
                         echo '<img src="?file=' . urlencode($user_filename) . '" alt="User Photo">';
                     } else {
-                        echo '<div style="width: 100%; height: 300px; background: #f0f0f0; display: flex; align-items: center; justify-content: center; color: #666;">Image not found</div>';
+                        echo '<div style="width: 100%; height: 300px; background: #f0f0f0; display: flex; align-items: center; justify-content: center; color: #666;">No user photo available</div>';
                     }
                     ?>
                 </div>
                 <div class="image-box">
                     <div class="section-title">Jewelry Photo</div>
                     <?php
-                    if (file_exists($jewelry_photo_path) && filesize($jewelry_photo_path) > 0) {
+                    if (!empty($jewelry_photo_path) && file_exists($jewelry_photo_path) && filesize($jewelry_photo_path) > 0) {
                         $jewelry_filename = basename($jewelry_photo_path);
                         echo '<img src="?file=' . urlencode($jewelry_filename) . '" alt="Jewelry Photo">';
                     } else {
-                        echo '<div style="width: 100%; height: 300px; background: #f0f0f0; display: flex; align-items: center; justify-content: center; color: #666;">Image not found</div>';
+                        echo '<div style="width: 100%; height: 300px; background: #f0f0f0; display: flex; align-items: center; justify-content: center; color: #666;">No jewelry photo available</div>';
                     }
                     ?>
                 </div>
@@ -156,11 +156,18 @@
             <div class="bottom-section">
                 <div class="section-title">Try-On Result</div>
                 <?php
-                if (file_exists($tryon_photo_path) && filesize($tryon_photo_path) > 0) {
+                if (!empty($tryon_photo_path) && file_exists($tryon_photo_path) && filesize($tryon_photo_path) > 0) {
                     $tryon_filename = basename($tryon_photo_path);
-                    echo '<img src="?file=' . urlencode($tryon_filename) . '" alt="Try-On Result">';
+                    // If the try-on result is in the cache (uploads/results/), use 'results/<filename>'
+                    $tryon_relative_path = '';
+                    if (strpos($tryon_photo_path, DIRECTORY_SEPARATOR . 'results' . DIRECTORY_SEPARATOR) !== false) {
+                        $tryon_relative_path = 'results/' . $tryon_filename;
+                    } else {
+                        $tryon_relative_path = $tryon_filename;
+                    }
+                    echo '<img src="?file=' . urlencode($tryon_relative_path) . '" alt="Try-On Result">';
                 } else {
-                    echo '<div style="width: 100%; height: 200px; background: #f0f0f0; display: flex; align-items: center; justify-content: center; color: #666;">Try-on result not found</div>';
+                    echo '<div style="width: 100%; height: 200px; background: #f0f0f0; display: flex; align-items: center; justify-content: center; color: #666;">Try-on result not available. Please try again.</div>';
                 }
                 ?>
             </div>
