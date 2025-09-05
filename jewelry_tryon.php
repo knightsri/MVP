@@ -119,6 +119,8 @@ try {
                 $has_user_selection = !empty($user_selected_filename);
                 $has_jewelry_selection = !empty($jewelry_selected_filename);
 
+                log_error("jewelry_tryon.php: Input detection - User: input={$has_user_input}, selection={$has_user_selection}, Jewelry: input={$has_jewelry_input}, selection={$has_jewelry_selection}", 'UPLOAD', 'DEBUG');
+
                 // Allow combinations: upload + selection, both uploads, both selections
                 if (($has_user_input || $has_user_selection) && ($has_jewelry_input || $has_jewelry_selection)) {
                     // Valid combination
@@ -131,7 +133,7 @@ try {
                 }
 
                 // Handle user photo upload/selection
-                if ($use_thumbnail_selection && !empty($user_selected_filename)) {
+                if (!empty($user_selected_filename)) {
                     $user_selected_path = $config['uploads']['directory'] . $user_selected_filename;
                     if (file_exists($user_selected_path)) {
                         $user_photo_path = $user_selected_path;
@@ -177,7 +179,7 @@ try {
                 }
 
                 // Handle jewelry photo upload/selection
-                if ($use_thumbnail_selection && !empty($jewelry_selected_filename)) {
+                if (!empty($jewelry_selected_filename)) {
                     $jewelry_selected_path = $config['uploads']['directory'] . $jewelry_selected_filename;
                     if (file_exists($jewelry_selected_path)) {
                         $jewelry_photo_path = $jewelry_selected_path;
