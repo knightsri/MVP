@@ -196,7 +196,7 @@ try {
                 $user_stats = get_image_stats($user_photo_path);
                 $jewelry_stats = get_image_stats($jewelry_photo_path);
                 if ($user_stats && $jewelry_stats) {
-                    log_error("Final images - User: {$user_stats['width']}x{$user_stats['height']} ({$user_stats['size_human']}), Jewelry: {$jewelry_stats['width']}x{$jewelry_stats['height']} ({$jewelry_stats['size_human']})", 'UPLOAD', 'INFO');
+                    log_error("Final images - User: {$user_stats['width']}x{$user_stats['height']} ({$user_stats['size_human']}), Jewelry: {$jewelry_stats['width']}x{$user_stats['height']} ({$jewelry_stats['size_human']})", 'UPLOAD', 'INFO');
                 }
                 $state = STATE_UPLOADED;
                 $tryon_photo_path = '';
@@ -240,38 +240,63 @@ try {
                     throw new Exception('Photo files not found. Please upload again');
                 }
 
-                log_error("jewelry_tryon.php: Calling webhook with user_dest: {$user_dest}, jewelry_dest: {$jewelry_dest}", 'PROCESSING', 'INFO');
-                // Call webhook with retry mechanism
-                $webhook_result = call_webhook_with_retry($user_dest, $jewelry_dest, $config['webhook']['max_retries']);
+                // Check cache first before calling webhook
+                log_error("jewelry_tryon.php: Checking cache for combination: {$user_dest} + {$jewelry_dest}", 'CACHE_CHECK', 'DEBUG');
+                $cached_result = check_cached_result($user_dest, $jewelry_dest);
 
-                if (!$webhook_result['success']) {
-                    log_error("jewelry_tryon.php: Webhook call failed. Error: " . ($webhook_result['error'] ?? 'Unknown'), 'PROCESSING', 'ERROR');
-                    $state = STATE_UPLOADED; // Stay on photos page
-                    $error_message = 'The Jewelry Try-On service is temporarily unavailable. Please try again later.';
-                    update_session_state('state', $state);
-                    update_session_state('error_message', $error_message);
-                    // Skip normal processing and let template handle error UI
+                if ($cached_result !== false) {
+                    // Use cached result
+                    log_error("jewelry_tryon.php: Using cached result: $cached_result", 'CACHE_HIT', 'INFO');
+
+                    $state = STATE_PROCESSED;
+                    $tryon_photo_path = $cached_result;
+                    $user_photo_path = $user_dest;
+                    $jewelry_photo_path = $jewelry_dest;
+
+                } else {
+                    // No cache found, call webhook
+                    log_error("jewelry_tryon.php: No cached result found, calling webhook", 'CACHE_MISS', 'INFO');
+                    log_error("jewelry_tryon.php: Calling webhook with user_dest: {$user_dest}, jewelry_dest: {$jewelry_dest}", 'PROCESSING', 'INFO');
+
+                    // Call webhook with retry mechanism
+                    $webhook_result = call_webhook_with_retry($user_dest, $jewelry_dest, $config['webhook']['max_retries']);
+
+                    if (!$webhook_result['success']) {
+                        log_error("jewelry_tryon.php: Webhook call failed. Error: " . ($webhook_result['error'] ?? 'Unknown'), 'PROCESSING', 'ERROR');
+                        $state = STATE_UPLOADED; // Stay on photos page
+                        $error_message = 'The Jewelry Try-On service is temporarily unavailable. Please try again later.';
+                        update_session_state('state', $state);
+                        update_session_state('error_message', $error_message);
+                    } else {
+                        log_error("jewelry_tryon.php: Webhook call successful. Response length: " . strlen($webhook_result['response']), 'PROCESSING', 'INFO');
+
+                        // Save the final try-on photo
+                        $tryon_filename = generate_random_filename('tryon_result.png');
+                        $tryon_dest_dir = $config['uploads']['directory'] . $tryon_filename;
+
+                        // Save result and cache it
+                        if (file_put_contents($tryon_dest_dir, $webhook_result['response']) === false) {
+                            throw new Exception('Failed to save try-on result');
+                        }
+
+                        // Save to cache
+                        $cache_saved = save_to_cache($user_dest, $jewelry_dest, $webhook_result['response']);
+                        if ($cache_saved) {
+                            log_error("jewelry_tryon.php: Result saved to cache successfully", 'CACHE_SAVE', 'INFO');
+                        }
+
+                        // Set permissions and update state
+                        @chmod($tryon_dest_dir, $config['uploads']['file_permissions']);
+                        $state = STATE_PROCESSED;
+                        $tryon_photo_path = $tryon_dest_dir;
+
+                        // IMPORTANT: Ensure original photo paths are retained for display in the processed state
+                        $user_photo_path = $user_dest;
+                        $jewelry_photo_path = $jewelry_dest;
+
+                        log_error("Try-on processing successful: $tryon_filename", 'PROCESSING', 'INFO');
+                    }
                 }
-                log_error("jewelry_tryon.php: Webhook call successful. Response length: " . strlen($webhook_result['response']), 'PROCESSING', 'INFO');
-
-                // Save the final try-on photo
-                $tryon_filename = generate_random_filename('tryon_result.png');
-                $tryon_dest = $config['uploads']['directory'] . $tryon_filename;
-
-                if (file_put_contents($tryon_dest, $webhook_result['response']) === false) {
-                    throw new Exception('Failed to save try-on result');
-                }
-
-                // Set permissions and update state
-                @chmod($tryon_dest, $config['uploads']['file_permissions']);
-                $state = STATE_PROCESSED;
-                $tryon_photo_path = $tryon_dest;
-
-                // IMPORTANT: Ensure original photo paths are retained for display in the processed state
-                $user_photo_path = $user_dest;
-                $jewelry_photo_path = $jewelry_dest;
-
-                log_error("Try-on processing successful: $tryon_filename", 'PROCESSING', 'INFO');
             }
 
             // Save all state changes to session

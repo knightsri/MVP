@@ -9,6 +9,7 @@ $config = [
     ],
     'uploads' => [
         'directory' => 'uploads/',
+        'results_directory' => 'uploads/results/',
         'cache_time' => 3600, // Cache time in seconds (1 hour)
         'security_file' => '.htaccess',
         'security_content' => "deny from all\n",
@@ -65,6 +66,7 @@ define('DEBUG_ENABLED', true); // Set to true to enable forced debug logging
 // Create required directories
 $required_dirs = [
     $config['uploads']['directory'],
+    $config['uploads']['results_directory'],
     dirname(ERROR_LOG_FILE)
 ];
 
