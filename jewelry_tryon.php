@@ -248,6 +248,10 @@ try {
                 $state = STATE_PROCESSED;
                 $tryon_photo_path = $tryon_dest;
 
+                // IMPORTANT: Ensure original photo paths are retained for display in the processed state
+                $user_photo_path = $user_dest;
+                $jewelry_photo_path = $jewelry_dest;
+
                 log_error("Try-on processing successful: $tryon_filename", 'PROCESSING', 'INFO');
             }
 
