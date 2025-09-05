@@ -148,6 +148,7 @@ input[type="hidden"] {
 .thumbnail-gallery-container {
     margin-top: 15px;
     margin-bottom: 15px;
+    max-width: 100%;
 }
 
 .thumbnail-gallery {
