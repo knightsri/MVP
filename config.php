@@ -49,8 +49,6 @@ define('ERROR_LOG_FILE', 'logs/errors.log');
 // Application constants
 define('APP_TITLE', 'Jewelry Try-On Application');
 define('MAX_CURL_TIMEOUT', 60);
-define('PIN_STATE_ON', 'on');
-define('PIN_STATE_OFF', 'off');
 
 // Image optimization constants
 define('IMAGE_MAX_WIDTH', 1200);

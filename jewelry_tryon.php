@@ -74,8 +74,6 @@ try {
     $user_photo_path = get_session_state('user_photo_path', '');
     $jewelry_photo_path = get_session_state('jewelry_photo_path', '');
     $tryon_photo_path = get_session_state('tryon_photo_path', '');
-    $pin_user = get_session_state('pin_user', false);
-    $pin_jewelry = get_session_state('pin_jewelry', false);
     $error_message = get_session_state('error_message', '');
 
     // Handle form submissions with comprehensive validation
@@ -101,40 +99,39 @@ try {
             }
 
             if ($action === ACTION_RESET) {
-                // Handle reset action with validation
-                $pin_user = validate_pin_state($postData['pin_user'] ?? '', 'RESET') === PIN_STATE_ON;
-                $pin_jewelry = validate_pin_state($postData['pin_jewelry'] ?? '', 'RESET') === PIN_STATE_ON;
-
-                // Validate pinned photos still exist
-                $pin_validation = validate_pinned_photos($user_photo_path, $jewelry_photo_path, $pin_user, $pin_jewelry);
-                if (!$pin_validation['valid']) {
-                    log_error("Reset: Pinned photos validation failed: " . implode(', ', $pin_validation['errors']), 'RESET', 'WARNING');
-                    // Clear invalid pinned photos
-                    $pin_user = false;
-                    $pin_jewelry = false;
-                }
-
-                // Reset to initial state, but respect pinned photos
+                // Handle reset action - clear all photos and reset to initial state
                 $state = STATE_FORM;
-                if (!$pin_user) {
-                    $user_photo_path = '';
-                }
-                if (!$pin_jewelry) {
-                    $jewelry_photo_path = '';
-                }
+                $user_photo_path = '';
+                $jewelry_photo_path = '';
                 $tryon_photo_path = '';
 
             } elseif ($action === ACTION_UPLOAD) {
                 log_error("jewelry_tryon.php: Handling ACTION_UPLOAD. Raw FILES: " . print_r($_FILES, true), 'UPLOAD', 'INFO');
-                
-                // Handle photo upload with PIN state consideration
-                if (!validate_uploaded_files_with_pins($_FILES, $pin_user, $pin_jewelry)) {
-                     log_error("jewelry_tryon.php: validate_uploaded_files_with_pins failed.", 'UPLOAD', 'ERROR');
-                    throw new Exception('Required photo files are missing');
+
+                // Handle photo upload/selection with comprehensive validation
+                $use_thumbnail_selection = false;
+                $user_selected_filename = $postData['user_photo_selected'] ?? '';
+                $jewelry_selected_filename = $postData['jewelry_photo_selected'] ?? '';
+
+                // Check if user selected thumbnail or uploaded file
+                if (!empty($user_selected_filename) && !empty($jewelry_selected_filename)) {
+                    $use_thumbnail_selection = true;
+                    log_error("jewelry_tryon.php: Using thumbnail selection mode", 'UPLOAD', 'INFO');
+                } elseif (!validate_uploaded_files($_FILES)) {
+                     log_error("jewelry_tryon.php: validate_uploaded_files failed and no thumbnails selected.", 'UPLOAD', 'ERROR');
+                    throw new Exception('Required photo files are missing or no thumbnails selected');
                 }
 
-                // Handle user photo upload (if not pinned)
-                if (!$pin_user && isset($_FILES['user_photo']) && $_FILES['user_photo']['error'] === UPLOAD_ERR_OK) {
+                // Handle user photo upload/selection
+                if ($use_thumbnail_selection && !empty($user_selected_filename)) {
+                    $user_selected_path = $config['uploads']['directory'] . $user_selected_filename;
+                    if (file_exists($user_selected_path)) {
+                        $user_photo_path = $user_selected_path;
+                        log_error("jewelry_tryon.php: Using selected user thumbnail: {$user_selected_filename}", 'UPLOAD', 'INFO');
+                    } else {
+                        throw new Exception('Selected user photo not found');
+                    }
+                } elseif (isset($_FILES['user_photo']) && $_FILES['user_photo']['error'] === UPLOAD_ERR_OK) {
                     $user_photo = $_FILES['user_photo'];
                     log_error("jewelry_tryon.php: Processing new user photo upload", 'UPLOAD', 'INFO');
 
@@ -161,12 +158,26 @@ try {
                         log_error("User photo optimization failed but upload succeeded: $user_filename", 'UPLOAD', 'WARNING');
                     }
 
+                    // Create thumbnail for gallery display
+                    $thumbnail_creation = create_upload_thumbnail($user_dest, $user_filename, 'user_');
+                    if (!$thumbnail_creation) {
+                        log_error("User thumbnail creation failed: $user_filename", 'UPLOAD', 'WARNING');
+                    }
+
                     $user_photo_path = $user_dest;
                     error_log("jewelry_tryon.php: User photo saved to: {$user_dest}. Current memory: " . memory_get_usage(), E_USER_NOTICE);
                 }
 
-                // Handle jewelry photo upload (if not pinned)
-                if (!$pin_jewelry && isset($_FILES['jewelry_photo']) && $_FILES['jewelry_photo']['error'] === UPLOAD_ERR_OK) {
+                // Handle jewelry photo upload/selection
+                if ($use_thumbnail_selection && !empty($jewelry_selected_filename)) {
+                    $jewelry_selected_path = $config['uploads']['directory'] . $jewelry_selected_filename;
+                    if (file_exists($jewelry_selected_path)) {
+                        $jewelry_photo_path = $jewelry_selected_path;
+                        log_error("jewelry_tryon.php: Using selected jewelry thumbnail: {$jewelry_selected_filename}", 'UPLOAD', 'INFO');
+                    } else {
+                        throw new Exception('Selected jewelry photo not found');
+                    }
+                } elseif (isset($_FILES['jewelry_photo']) && $_FILES['jewelry_photo']['error'] === UPLOAD_ERR_OK) {
                     $jewelry_photo = $_FILES['jewelry_photo'];
                     log_error("jewelry_tryon.php: Processing new jewelry photo upload", 'UPLOAD', 'INFO');
 
@@ -193,6 +204,12 @@ try {
                         log_error("Jewelry photo optimization failed but upload succeeded: $jewelry_filename", 'UPLOAD', 'WARNING');
                     }
 
+                    // Create thumbnail for gallery display
+                    $thumbnail_creation = create_upload_thumbnail($jewelry_dest, $jewelry_filename, 'jewel_');
+                    if (!$thumbnail_creation) {
+                        log_error("Jewelry thumbnail creation failed: $jewelry_filename", 'UPLOAD', 'WARNING');
+                    }
+
                     $jewelry_photo_path = $jewelry_dest;
                     error_log("jewelry_tryon.php: Jewelry photo saved to: {$jewelry_dest}. Current memory: " . memory_get_usage(), E_USER_NOTICE);
                 }
@@ -212,9 +229,6 @@ try {
 
             } elseif ($action === ACTION_TRYON) {
                 error_log("jewelry_tryon.php: Handling ACTION_TRYON. Current memory: " . memory_get_usage() . " Peak memory: " . memory_get_peak_usage(), E_USER_NOTICE);
-                // Handle try-on processing with validation
-                $pin_user = validate_pin_state($postData['pin_user'] ?? '', 'TRYON') === PIN_STATE_ON;
-                $pin_jewelry = validate_pin_state($postData['pin_jewelry'] ?? '', 'TRYON') === PIN_STATE_ON;
 
                 // Sanitize and validate file paths from POST data
                 $user_dest = sanitize_file_path(
@@ -272,8 +286,6 @@ try {
             update_session_state('user_photo_path', $user_photo_path);
             update_session_state('jewelry_photo_path', $jewelry_photo_path);
             update_session_state('tryon_photo_path', $tryon_photo_path);
-            update_session_state('pin_user', $pin_user);
-            update_session_state('pin_jewelry', $pin_jewelry);
             update_session_state('error_message', ''); // Clear any previous errors
 
             log_error("Session state saved after {$action} action", 'SESSION', 'INFO');
@@ -282,7 +294,7 @@ try {
             error_log("jewelry_tryon.php: Exception caught in POST handling: " . $e->getMessage() . " on line " . $e->getLine() . " in " . $e->getFile());
             $error_message = handle_exception($e, 'FORM_PROCESSING');
             $state = STATE_FORM; // Reset to form on error
-            
+
             // Save error state to session
             update_session_state('state', $state);
             update_session_state('error_message', $error_message);
@@ -298,7 +310,7 @@ try {
     error_log("jewelry_tryon.php: Main exception caught: " . $e->getMessage() . " on line " . $e->getLine() . " in " . $e->getFile());
     $error_message = handle_exception($e, 'MAIN_PROCESSING');
     $state = STATE_FORM;
-    
+
     // Save error state to session
     update_session_state('state', $state);
     update_session_state('error_message', $error_message);

@@ -88,13 +88,11 @@ button {
 }
 button:hover {
     background-color: #0056b3;
+
 }
 
 input[type="hidden"] {
     display: none;
-}
-input[type="checkbox"] {
-    margin: 5px;
 }
 .section-title {
     margin-bottom: 10px;
@@ -111,110 +109,89 @@ input[type="checkbox"] {
     padding: 10px;
     text-align: center;
 }
-.pin-control {
-    position: absolute;
-    top: 5px;
-    right: 5px;
-    background: white;
-    border: 1px solid #ccc;
-    border-radius: 3px;
-    padding: 3px 5px;
-    font-size: 11px;
-    z-index: 10;
-}
 
-/* PIN functionality styles */
-.image-box.pinned {
-    border: 3px solid #ffc107;
+/* Thumbnail Gallery Styles */
+.upload-section {
+    margin-bottom: 30px;
+    padding: 20px;
+    border: 1px solid #ddd;
     border-radius: 8px;
-    background: linear-gradient(135deg, rgba(255, 193, 7, 0.1) 0%, rgba(255, 255, 255, 0.1) 100%);
+    background-color: #f9f9f9;
 }
 
-.pin-indicator {
-    position: absolute;
-    top: -8px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: #ffc107;
-    color: #000;
-    padding: 4px 8px;
-    border-radius: 12px;
-    font-size: 10px;
-    font-weight: bold;
-    z-index: 15;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+.thumbnail-gallery-container {
+    margin-top: 15px;
 }
 
-.pinned-photos-section {
-    background: #f8f9fa;
-    border: 1px solid #dee2e6;
-    border-radius: 8px;
-    margin: 20px;
-    padding: 15px;
+.thumbnail-gallery-container h4 {
+    margin-bottom: 10px;
+    color: #333;
+    font-size: 16px;
 }
 
-.pinned-photos-section p {
-    margin: 0 0 15px 0;
-    font-weight: bold;
-    color: #495057;
-}
-
-.pinned-image {
-    display: inline-block;
-    margin: 10px;
-    border: 2px solid #ffc107;
-    border-radius: 8px;
+.thumbnail-gallery {
+    display: flex;
+    overflow-x: auto;
+    gap: 10px;
     padding: 10px;
-    background: white;
-    max-width: 200px;
+    background-color: white;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    max-height: 120px;
 }
 
-.pinned-image img {
-    max-width: 100%;
-    max-height: 150px;
-    border: none;
+.thumbnail-gallery::-webkit-scrollbar {
+    height: 6px;
 }
 
-.pinned-image .section-title {
-    color: #f57c00;
-    font-size: 14px;
-    margin-bottom: 8px;
+.thumbnail-gallery::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
 }
 
-.reset-button {
-    background-color: #dc3545;
-    border-color: #dc3545;
+.thumbnail-gallery::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 3px;
 }
 
-.reset-button:hover {
-    background-color: #c82333;
-    border-color: #bd2130;
+.thumbnail-gallery::-webkit-scrollbar-thumb:hover {
+    background: #555;
 }
 
-/* Enhance form styling for partial PIN states */
-form p {
-    color: #28a745;
-    font-weight: bold;
-    margin: 10px 0;
-    padding: 8px;
-    background: #d4edda;
-    border: 1px solid #c3e6cb;
-    border-radius: 4px;
-    display: inline-block;
+.thumbnail {
+    flex-shrink: 0;
+    width: 80px;
+    height: 80px;
+    object-fit: cover;
+    border: 2px solid #ddd;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.2s ease;
 }
 
-/* Responsive improvements */
-@media (max-width: 768px) {
-    .top-section {
-        flex-direction: column;
-    }
-    
-    .image-box {
-        margin: 10px 0;
-    }
-    
-    .pinned-image {
-        display: block;
-        margin: 10px auto;
-    }
+.thumbnail:hover {
+    border-color: #007bff;
+    transform: scale(1.05);
+}
+
+.thumbnail.selected {
+    border-color: #28a745;
+    box-shadow: 0 0 8px rgba(40, 167, 69, 0.5);
+    transform: scale(1.1);
+}
+
+.no-thumbnails {
+    color: #666;
+    font-style: italic;
+    padding: 20px;
+    text-align: center;
+    margin: 0;
+}
+
+input[type="file"] {
+    margin-bottom: 15px;
+}
+
+input[type="hidden"] {
+    display: none;
 }

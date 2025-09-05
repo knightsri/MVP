@@ -85,18 +85,6 @@ function sanitize_string($input, $context = '', $max_length = 0) {
     return $sanitized;
 }
 
-// Function to validate and sanitize checkbox/pin state
-function validate_pin_state($input, $context = '') {
-    $sanitized = sanitize_string($input, $context, 10);
-
-    if ($sanitized === PIN_STATE_ON || $sanitized === PIN_STATE_OFF) {
-        return $sanitized;
-    }
-
-    log_error("Invalid pin state: $input", $context, 'WARNING');
-    return PIN_STATE_OFF;
-}
-
 // Function to validate action parameter
 function validate_action($action, $context = '') {
     $valid_actions = [ACTION_RESET, ACTION_UPLOAD, ACTION_TRYON];
@@ -140,8 +128,8 @@ function validate_file_path($path, $context = '') {
  * File upload and handling functions (enhanced)
  */
 
-// Function to generate a random filename with original extension
-function generate_random_filename($original_name) {
+// Function to generate a random filename with original extension and optional prefix
+function generate_random_filename($original_name, $prefix = '') {
     global $config;
 
     $original_name = sanitize_string($original_name, 'FILENAME_GEN');
@@ -156,9 +144,122 @@ function generate_random_filename($original_name) {
     // Generate secure random filename with timestamp
     $timestamp = microtime(true);
     $random = bin2hex(random_bytes(8));
-    $filename = sprintf('img_%s_%s.%s', date('Ymd_His', $timestamp), $random, $extension);
+
+    // Use prefix if provided, otherwise default to 'img_'
+    $prefix = empty($prefix) ? 'img_' : sanitize_string($prefix, 'FILENAME_GEN');
+    $filename = sprintf('%s%s_%s.%s', $prefix, date('Ymd_His', $timestamp), $random, $extension);
 
     return $filename;
+}
+
+// Function to get photos by prefix from uploads directory
+function get_photos_by_prefix($prefix) {
+    global $config;
+
+    if (empty($prefix)) {
+        log_error("Empty prefix provided to get_photos_by_prefix", 'PHOTO_LISTING', 'WARNING');
+        return [];
+    }
+
+    $uploads_dir = $config['uploads']['directory'];
+    if (!is_dir($uploads_dir)) {
+        log_error("Uploads directory not found: $uploads_dir", 'PHOTO_LISTING', 'WARNING');
+        return [];
+    }
+
+    $prefix = sanitize_string($prefix, 'PHOTO_LISTING');
+    $photos = [];
+
+    // Scan directory for files with the specified prefix
+    $files = scandir($uploads_dir);
+    if ($files === false) {
+        log_error("Failed to scan uploads directory: $uploads_dir", 'PHOTO_LISTING', 'ERROR');
+        return [];
+    }
+
+    foreach ($files as $file) {
+        if ($file === '.' || $file === '..') {
+            continue;
+        }
+
+        // Check if file starts with the prefix and is a valid image file
+        if (strpos($file, $prefix) === 0) {
+            $file_path = $uploads_dir . $file;
+
+            // Validate it's a readable file and an image
+            if (is_file($file_path) && is_readable($file_path)) {
+                $image_info = getimagesize($file_path);
+                if ($image_info !== false && in_array($image_info['mime'], ALLOWED_MIME_TYPES)) {
+                    $photos[] = $file;
+                }
+            }
+        }
+    }
+
+    // Sort photos by modification time (newest first)
+    usort($photos, function($a, $b) use ($uploads_dir) {
+        return filemtime($uploads_dir . $b) - filemtime($uploads_dir . $a);
+    });
+
+    log_error("Found " . count($photos) . " photos with prefix '$prefix'", 'PHOTO_LISTING', 'INFO');
+    return $photos;
+}
+
+// Function to get thumbnail data for photo display
+function get_photo_thumbnail_data($photo_path) {
+    global $config;
+
+    if (empty($photo_path)) {
+        log_error("Empty photo path provided to get_photo_thumbnail_data", 'THUMBNAIL_DATA', 'WARNING');
+        return null;
+    }
+
+    $validated_path = validate_file_path($photo_path, 'THUMBNAIL_DATA');
+    if (!$validated_path) {
+        log_error("Invalid photo path: $photo_path", 'THUMBNAIL_DATA', 'WARNING');
+        return null;
+    }
+
+    // Get basic image stats
+    $stats = get_image_stats($validated_path);
+    if (!$stats) {
+        log_error("Failed to get image stats for: $photo_path", 'THUMBNAIL_DATA', 'WARNING');
+        return null;
+    }
+
+    // Generate thumbnail dimensions (maintain aspect ratio)
+    $thumbnail_max_width = 150;
+    $thumbnail_max_height = 150;
+
+    $aspect_ratio = $stats['width'] / $stats['height'];
+    if ($aspect_ratio > 1) {
+        // Landscape
+        $thumb_width = $thumbnail_max_width;
+        $thumb_height = $thumbnail_max_width / $aspect_ratio;
+    } else {
+        // Portrait or square
+        $thumb_height = $thumbnail_max_height;
+        $thumb_width = $thumbnail_max_height * $aspect_ratio;
+    }
+
+    // Calculate relative path from uploads directory for URL generation
+    $uploads_dir = $config['uploads']['directory'];
+    $relative_path = str_replace($uploads_dir, '', $validated_path);
+
+    return [
+        'filename' => basename($validated_path),
+        'full_path' => $validated_path,
+        'relative_path' => ltrim($relative_path, '/'),
+        'width' => $stats['width'],
+        'height' => $stats['height'],
+        'mime_type' => $stats['mime_type'],
+        'size_bytes' => $stats['size_bytes'],
+        'size_human' => $stats['size_human'],
+        'thumbnail_width' => (int) round($thumb_width),
+        'thumbnail_height' => (int) round($thumb_height),
+        'modification_time' => filemtime($validated_path),
+        'url' => $config['uploads']['base_url'] . $relative_path
+    ];
 }
 
 // Function to validate uploaded files (enhanced with better error handling)
@@ -598,7 +699,6 @@ function sanitize_file_path($posted_path, $uploads_dir) {
     }
 
     $uploads_real_path = realpath(__DIR__ . '/' . dirname($uploads_dir . '/'));
-
     if (!$uploads_real_path || strpos($real_path, $uploads_real_path) !== 0) {
         log_error("Path traversal attempt: $real_path", 'PATH_SANITIZATION', 'SECURITY');
         return null;
@@ -731,7 +831,6 @@ function call_webhook($user_photo_path, $jewelry_photo_path) {
         log_error("cURL request completed. HTTP Code: {$http_code}. Request Info: " . print_r($request_info, true), 'WEBHOOK_CALL', 'INFO');
         log_error("cURL Response Body (first 500 chars): " . substr($response, 0, 500), 'WEBHOOK_CALL', 'INFO');
 
-
         if ($http_code !== 200) {
             log_error("Webhook returned non-200 HTTP status: {$http_code}", 'WEBHOOK_CALL', 'ERROR');
             throw new Exception("HTTP error: {$http_code}");
@@ -765,7 +864,7 @@ function initialize_session_state() {
     if (session_status() == PHP_SESSION_NONE) {
         session_start();
     }
-    
+
     // Initialize session variables if not set
     if (!isset($_SESSION['jewelry_app'])) {
         $_SESSION['jewelry_app'] = [
@@ -773,13 +872,11 @@ function initialize_session_state() {
             'user_photo_path' => '',
             'jewelry_photo_path' => '',
             'tryon_photo_path' => '',
-            'pin_user' => false,
-            'pin_jewelry' => false,
             'error_message' => '',
             'last_activity' => time()
         ];
     }
-    
+
     return $_SESSION['jewelry_app'];
 }
 
@@ -788,11 +885,11 @@ function update_session_state($key, $value) {
     if (session_status() == PHP_SESSION_NONE) {
         session_start();
     }
-    
+
     if (!isset($_SESSION['jewelry_app'])) {
         initialize_session_state();
     }
-    
+
     $_SESSION['jewelry_app'][$key] = $value;
     $_SESSION['jewelry_app']['last_activity'] = time();
 }
@@ -802,11 +899,11 @@ function get_session_state($key, $default = null) {
     if (session_status() == PHP_SESSION_NONE) {
         session_start();
     }
-    
+
     if (!isset($_SESSION['jewelry_app'])) {
         initialize_session_state();
     }
-    
+
     return $_SESSION['jewelry_app'][$key] ?? $default;
 }
 
@@ -815,7 +912,7 @@ function clear_session_state() {
     if (session_status() == PHP_SESSION_NONE) {
         session_start();
     }
-    
+
     unset($_SESSION['jewelry_app']);
 }
 
@@ -840,48 +937,268 @@ function validate_uploaded_files($files) {
            is_array($files['user_photo']) && is_array($files['jewelry_photo']);
 }
 
-// Function to validate uploaded files with PIN state consideration
-function validate_uploaded_files_with_pins($files, $pin_user, $pin_jewelry) {
-    if (!is_array($files)) {
+/**
+ * Photo gallery and thumbnail functions
+ */
+
+// Function to get user thumbnails (thumb_user_ prefix from thumbnails/ subfolder)
+function get_user_thumbnails() {
+    return get_thumbnails_from_subfolder('thumb_user_');
+}
+
+// Function to get jewelry thumbnails (thumb_jewel_ prefix from thumbnails/ subfolder)
+function get_jewelry_thumbnails() {
+    return get_thumbnails_from_subfolder('thumb_jewel_');
+}
+
+// Function to get thumbnails from thumbnails subfolder
+function get_thumbnails_from_subfolder($prefix) {
+    global $config;
+
+    if (empty($prefix)) {
+        log_error("Empty prefix provided to get_thumbnails_from_subfolder", 'THUMBNAIL_LISTING', 'WARNING');
+        return [];
+    }
+
+    $thumbnails_dir = $config['uploads']['directory'] . 'thumbnails/';
+    if (!is_dir($thumbnails_dir)) {
+        log_error("Thumbnails directory not found: $thumbnails_dir", 'THUMBNAIL_LISTING', 'WARNING');
+        return [];
+    }
+
+    $prefix = sanitize_string($prefix, 'THUMBNAIL_LISTING');
+    $thumbnails = [];
+
+    // Scan thumbnails directory for files with the specified prefix
+    $files = scandir($thumbnails_dir);
+    if ($files === false) {
+        log_error("Failed to scan thumbnails directory: $thumbnails_dir", 'THUMBNAIL_LISTING', 'ERROR');
+        return [];
+    }
+
+    foreach ($files as $file) {
+        if ($file === '.' || $file === '..') {
+            continue;
+        }
+
+        // Check if file starts with the prefix and is a valid image file
+        if (strpos($file, $prefix) === 0) {
+            $file_path = $thumbnails_dir . $file;
+
+            // Validate it's a readable file and an image
+            if (is_file($file_path) && is_readable($file_path)) {
+                $image_info = getimagesize($file_path);
+                if ($image_info !== false && in_array($image_info['mime'], ALLOWED_MIME_TYPES)) {
+                    $thumbnails[] = $file;
+                }
+            }
+        }
+    }
+
+    // Sort thumbnails by modification time (newest first)
+    usort($thumbnails, function($a, $b) use ($thumbnails_dir) {
+        return filemtime($thumbnails_dir . $b) - filemtime($thumbnails_dir . $a);
+    });
+
+    log_error("Found " . count($thumbnails) . " thumbnails with prefix '$prefix'", 'THUMBNAIL_LISTING', 'INFO');
+    return $thumbnails;
+}
+
+// Function to create thumbnail during upload
+function create_upload_thumbnail($source_path, $original_filename, $prefix = 'img_') {
+    global $config;
+
+    if (!file_exists($source_path)) {
+        log_error("Thumbnail creation: Source file not found - $source_path", 'THUMBNAIL_CREATION', 'WARNING');
         return false;
     }
 
-    // Check if we have user photo when needed (not pinned)
-    $user_valid = $pin_user || (isset($files['user_photo']) && 
-                                is_array($files['user_photo']) && 
-                                $files['user_photo']['error'] === UPLOAD_ERR_OK);
+    // Get image info
+    $image_info = getimagesize($source_path);
+    if ($image_info === false) {
+        log_error("Thumbnail creation: Invalid image - $source_path", 'THUMBNAIL_CREATION', 'WARNING');
+        return false;
+    }
 
-    // Check if we have jewelry photo when needed (not pinned)  
-    $jewelry_valid = $pin_jewelry || (isset($files['jewelry_photo']) && 
-                                     is_array($files['jewelry_photo']) && 
-                                     $files['jewelry_photo']['error'] === UPLOAD_ERR_OK);
+    $mime_type = $image_info['mime'];
+    $original_width = $image_info[0];
+    $original_height = $image_info[1];
 
-    return $user_valid && $jewelry_valid;
+    // Skip thumbnail creation if image is already small
+    if ($original_width <= 150 && $original_height <= 150) {
+        log_error("Thumbnail creation: Image already thumbnail size - $source_path", 'THUMBNAIL_CREATION', 'INFO');
+        return true;
+    }
+
+    // Create thumbnail filename and save in thumbnails subfolder
+    $thumbnail_filename = str_replace($prefix, 'thumb_' . $prefix, $original_filename);
+    $thumbnail_dir = $config['uploads']['directory'] . 'thumbnails/';
+    $thumbnail_path = $thumbnail_dir . $thumbnail_filename;
+
+    // Ensure thumbnails directory exists
+    if (!is_dir($thumbnail_dir)) {
+        if (!mkdir($thumbnail_dir, 0755, true)) {
+            log_error("Thumbnail creation: Failed to create thumbnails directory - $thumbnail_dir", 'THUMBNAIL_CREATION', 'ERROR');
+            return false;
+        }
+    }
+
+    try {
+        // Create thumbnail image
+        $thumbnail_result = false;
+
+        switch ($mime_type) {
+            case 'image/jpeg':
+            case 'image/jpg':
+                $thumbnail_result = create_jpeg_thumbnail($source_path, $thumbnail_path, $original_width, $original_height);
+                break;
+            case 'image/png':
+                $thumbnail_result = create_png_thumbnail($source_path, $thumbnail_path, $original_width, $original_height);
+                break;
+            case 'image/gif':
+                $thumbnail_result = create_gif_thumbnail($source_path, $thumbnail_path, $original_width, $original_height);
+                break;
+            default:
+                log_error("Thumbnail creation: Unsupported format - $mime_type", 'THUMBNAIL_CREATION', 'WARNING');
+                return false;
+        }
+
+        if ($thumbnail_result && file_exists($thumbnail_path)) {
+            @chmod($thumbnail_path, $config['uploads']['file_permissions']);
+            log_error("Thumbnail created successfully: $thumbnail_filename", 'THUMBNAIL_CREATION', 'INFO');
+            return true;
+        } else {
+            log_error("Thumbnail creation failed: $thumbnail_filename", 'THUMBNAIL_CREATION', 'ERROR');
+            return false;
+        }
+
+    } catch (Exception $e) {
+        log_error("Thumbnail creation exception: " . $e->getMessage(), 'THUMBNAIL_CREATION', 'ERROR');
+        return false;
+    }
 }
 
-// Function to validate that pinned photos still exist
-function validate_pinned_photos($user_photo_path, $jewelry_photo_path, $pin_user, $pin_jewelry) {
-    $errors = [];
-    
-    if ($pin_user && (!empty($user_photo_path) && !file_exists($user_photo_path))) {
-        $errors[] = 'Pinned user photo no longer exists';
-        log_error("Pinned user photo missing: $user_photo_path", 'PIN_VALIDATION', 'WARNING');
+// Function to create JPEG thumbnail
+function create_jpeg_thumbnail($source_path, $thumbnail_path, $original_width, $original_height) {
+    list($new_width, $new_height) = calculate_thumbnail_dimensions($original_width, $original_height, 150, 150);
+
+    $source_image = imagecreatefromjpeg($source_path);
+    if (!$source_image) {
+        return false;
     }
-    
-    if ($pin_jewelry && (!empty($jewelry_photo_path) && !file_exists($jewelry_photo_path))) {
-        $errors[] = 'Pinned jewelry photo no longer exists';
-        log_error("Pinned jewelry photo missing: $jewelry_photo_path", 'PIN_VALIDATION', 'WARNING');
-    }
-    
-    return empty($errors) ? ['valid' => true] : ['valid' => false, 'errors' => $errors];
+
+    $thumbnail_image = imagecreatetruecolor($new_width, $new_height);
+
+    // Fill with white background
+    $white = imagecolorallocate($thumbnail_image, 255, 255, 255);
+    imagefill($thumbnail_image, 0, 0, $white);
+
+    // Resize
+    imagecopyresampled($thumbnail_image, $source_image, 0, 0, 0, 0, $new_width, $new_height, $original_width, $original_height);
+
+    $result = imagejpeg($thumbnail_image, $thumbnail_path, 85); // 85% quality for thumbnails
+
+    imagedestroy($source_image);
+    imagedestroy($thumbnail_image);
+
+    return $result;
 }
+
+// Function to create PNG thumbnail
+function create_png_thumbnail($source_path, $thumbnail_path, $original_width, $original_height) {
+    list($new_width, $new_height) = calculate_thumbnail_dimensions($original_width, $original_height, 150, 150);
+
+    $source_image = imagecreatefrompng($source_path);
+    if (!$source_image) {
+        return false;
+    }
+
+    $thumbnail_image = imagecreatetruecolor($new_width, $new_height);
+
+    // Enable alpha channel
+    imagealphablending($thumbnail_image, false);
+    imagesavealpha($thumbnail_image, true);
+
+    // Resize
+    imagecopyresampled($thumbnail_image, $source_image, 0, 0, 0, 0, $new_width, $new_height, $original_width, $original_height);
+
+    $result = imagepng($thumbnail_image, $thumbnail_path, 6); // Compression level 6
+
+    imagedestroy($source_image);
+    imagedestroy($thumbnail_image);
+
+    return $result;
+}
+
+// Function to create GIF thumbnail
+function create_gif_thumbnail($source_path, $thumbnail_path, $original_width, $original_height) {
+    list($new_width, $new_height) = calculate_thumbnail_dimensions($original_width, $original_height, 150, 150);
+
+    $source_image = imagecreatefromgif($source_path);
+    if (!$source_image) {
+        return false;
+    }
+
+    $thumbnail_image = imagecreatetruecolor($new_width, $new_height);
+
+    // Enable transparency
+    imagealphablending($thumbnail_image, false);
+    imagesavealpha($thumbnail_image, true);
+
+    // Resize
+    imagecopyresampled($thumbnail_image, $source_image, 0, 0, 0, 0, $new_width, $new_height, $original_width, $original_height);
+
+    $result = imagegif($thumbnail_image, $thumbnail_path);
+
+    imagedestroy($source_image);
+    imagedestroy($thumbnail_image);
+
+    return $result;
+}
+
+// Function to calculate thumbnail dimensions (maintains aspect ratio)
+function calculate_thumbnail_dimensions($original_width, $original_height, $max_width = 150, $max_height = 150) {
+    // If image is already within limits, return original dimensions
+    if ($original_width <= $max_width && $original_height <= $max_height) {
+        return [$original_width, $original_height];
+    }
+
+    // Calculate aspect ratio
+    $aspect_ratio = $original_width / $original_height;
+
+    // Calculate new dimensions
+    if ($original_width > $original_height) {
+        // Landscape or square
+        $new_width = min($original_width, $max_width);
+        $new_height = $new_width / $aspect_ratio;
+
+        // If height exceeds limit, recalculate
+        if ($new_height > $max_height) {
+            $new_height = $max_height;
+            $new_width = $new_height * $aspect_ratio;
+        }
+    } else {
+        // Portrait
+        $new_height = min($original_height, $max_height);
+        $new_width = $new_height * $aspect_ratio;
+
+        // If width exceeds limit, recalculate
+        if ($new_width > $max_width) {
+            $new_width = $max_width;
+            $new_height = $new_width / $aspect_ratio;
+        }
+    }
+
+    return [(int) round($new_width), (int) round($new_height)];
+}
+
 
 // Helper function for memory logging
 if (!function_exists('format_bytes')) {
     function format_bytes($bytes, $precision = 2) {
         $units = array('B', 'KB', 'MB', 'GB', 'TB');
         $bytes = max($bytes, 0);
-        $pow = floor(($bytes ? log($bytes) : 0) / log(1024));
+        $pow = floor(($bytes ? log($bytes) : 0) / 1024);
         $pow = min($pow, count($units) - 1);
         $bytes /= (1 << (10 * $pow));
         return round($bytes, $precision) . ' ' . $units[$pow];
