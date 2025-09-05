@@ -142,7 +142,7 @@ try {
                     }
 
                     // Generate secure filename and save
-                    $user_filename = generate_random_filename($user_photo['name']);
+                    $user_filename = generate_random_filename($user_photo['name'], 'user_');
                     $user_dest = $config['uploads']['directory'] . $user_filename;
 
                     log_error("jewelry_tryon.php: Moving uploaded user photo from {$user_photo['tmp_name']} to {$user_dest}", 'UPLOAD', 'INFO');
@@ -188,7 +188,7 @@ try {
                     }
 
                     // Generate secure filename and save
-                    $jewelry_filename = generate_random_filename($jewelry_photo['name']);
+                    $jewelry_filename = generate_random_filename($jewelry_photo['name'], 'jewel_');
                     $jewelry_dest = $config['uploads']['directory'] . $jewelry_filename;
 
                     log_error("jewelry_tryon.php: Moving uploaded jewelry photo from {$jewelry_photo['tmp_name']} to {$jewelry_dest}", 'UPLOAD', 'INFO');
