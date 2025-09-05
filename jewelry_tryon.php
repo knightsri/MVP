@@ -1,14 +1,20 @@
 <?php
+error_log("jewelry_tryon.php: Script execution started."); // General debug log for early issues
+
 // Include configuration first to define constants
 require_once 'config.php';
 require_once 'functions.php';
 
 try {
+    error_log("jewelry_tryon.php: Starting request handling."); // General debug log
+
     // Handle secure file serving with validation
     if (isset($_GET['file'])) {
+        error_log("jewelry_tryon.php: GET request for file serving detected.");
         $file_param = sanitize_string($_GET['file'], 'FILE_SERVING', $config['validation']['max_filename_length']);
 
         if (!empty($file_param)) {
+            log_error("Serving file: " . $file_param, 'FILE_SERVING', 'INFO');
             $file_path = $config['uploads']['directory'] . $file_param;
             $secure_path = serve_secure_file($file_path);
 
@@ -53,15 +59,21 @@ try {
 
     // Handle form submissions with comprehensive validation
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        error_log("jewelry_tryon.php: POST request detected. Action: " . ($_POST['action'] ?? 'N/A'));
+        log_error("jewelry_tryon.php: POST request initiated. Raw POST: " . print_r($_POST, true), 'FORM_PROCESSING', 'INFO');
+
         try {
             // Sanitize all POST data
             $postData = sanitize_post_data($_POST);
+            log_error("jewelry_tryon.php: POST data sanitized. Sanitized: " . print_r($postData, true), 'FORM_PROCESSING', 'INFO');
 
             if (!isset($postData['action'])) {
+                log_error("jewelry_tryon.php: Missing action parameter in POST data.", 'FORM_PROCESSING', 'ERROR');
                 throw new Exception('Missing action parameter');
             }
 
             $action = validate_action($postData['action'], 'FORM_PROCESSING');
+            log_error("jewelry_tryon.php: Action validated as: " . $action, 'FORM_PROCESSING', 'INFO');
 
             if (!$action) {
                 throw new Exception('Invalid action parameter');
@@ -83,13 +95,17 @@ try {
                 $tryon_photo_path = '';
 
             } elseif ($action === ACTION_UPLOAD) {
+                log_error("jewelry_tryon.php: Handling ACTION_UPLOAD. Raw FILES: " . print_r($_FILES, true), 'UPLOAD', 'INFO');
                 // Handle photo upload with comprehensive validation
                 if (!validate_uploaded_files($_FILES)) {
+                     log_error("jewelry_tryon.php: validate_uploaded_files failed.", 'UPLOAD', 'ERROR');
                     throw new Exception('Both user photo and jewelry photo files are required');
                 }
 
                 $user_photo = $_FILES['user_photo'];
                 $jewelry_photo = $_FILES['jewelry_photo'];
+
+                log_error("jewelry_tryon.php: user_photo temp: " . ($user_photo['tmp_name'] ?? 'N/A') . ", jewelry_photo temp: " . ($jewelry_photo['tmp_name'] ?? 'N/A'), 'UPLOAD', 'INFO');
 
                 // Validate user photo
                 $user_validation = validate_file_upload($user_photo);
@@ -111,16 +127,22 @@ try {
                 $user_dest = $config['uploads']['directory'] . $user_filename;
                 $jewelry_dest = $config['uploads']['directory'] . $jewelry_filename;
 
+                log_error("jewelry_tryon.php: Moving uploaded user photo from {$user_photo['tmp_name']} to {$user_dest}", 'UPLOAD', 'INFO');
                 // Move uploaded files with error handling
                 if (!move_uploaded_file($user_photo['tmp_name'], $user_dest)) {
+                    log_error("jewelry_tryon.php: Failed to save user photo: {$user_photo['tmp_name']} to {$user_dest}", 'UPLOAD', 'ERROR');
                     throw new Exception('Failed to save user photo');
                 }
+                log_error("jewelry_tryon.php: User photo saved to: {$user_dest}", 'UPLOAD', 'INFO');
 
+                log_error("jewelry_tryon.php: Moving uploaded jewelry photo from {$jewelry_photo['tmp_name']} to {$jewelry_dest}", 'UPLOAD', 'INFO');
                 if (!move_uploaded_file($jewelry_photo['tmp_name'], $jewelry_dest)) {
                     // Clean up the first file if second fails
+                    log_error("jewelry_tryon.php: Failed to save jewelry photo: {$jewelry_photo['tmp_name']} to {$jewelry_dest}", 'UPLOAD', 'ERROR');
                     @unlink($user_dest);
                     throw new Exception('Failed to save jewelry photo');
                 }
+                 log_error("jewelry_tryon.php: Jewelry photo saved to: {$jewelry_dest}", 'UPLOAD', 'INFO');
 
                 // Set secure permissions
                 @chmod($user_dest, $config['uploads']['file_permissions']);
@@ -154,6 +176,7 @@ try {
                 log_error("File upload and optimization successful: user=$user_filename, jewelry=$jewelry_filename", 'UPLOAD', 'INFO');
 
             } elseif ($action === ACTION_TRYON) {
+                log_error("jewelry_tryon.php: Handling ACTION_TRYON.", 'PROCESSING', 'INFO');
                 // Handle try-on processing with validation
                 $pin_user = validate_pin_state($postData['pin_user'] ?? '', 'TRYON') === PIN_STATE_ON;
                 $pin_jewelry = validate_pin_state($postData['pin_jewelry'] ?? '', 'TRYON') === PIN_STATE_ON;
@@ -167,6 +190,7 @@ try {
                     $postData['jewelry_photo_path'] ?? '',
                     $config['uploads']['directory']
                 );
+                log_error("jewelry_tryon.php: Try-on paths sanitized. User: {$user_dest}, Jewelry: {$jewelry_dest}", 'PROCESSING', 'INFO');
 
                 // Check if paths are valid
                 if ($user_dest === null || $jewelry_dest === null) {
@@ -178,12 +202,15 @@ try {
                     throw new Exception('Photo files not found. Please upload again');
                 }
 
+                log_error("jewelry_tryon.php: Calling webhook with user_dest: {$user_dest}, jewelry_dest: {$jewelry_dest}", 'PROCESSING', 'INFO');
                 // Call webhook with retry mechanism
                 $webhook_result = call_webhook_with_retry($user_dest, $jewelry_dest, $config['webhook']['max_retries']);
 
                 if (!$webhook_result['success']) {
+                    log_error("jewelry_tryon.php: Webhook call failed. Error: " . ($webhook_result['error'] ?? 'Unknown'), 'PROCESSING', 'ERROR');
                     throw new Exception('Webhook processing failed: ' . $webhook_result['error']);
                 }
+                log_error("jewelry_tryon.php: Webhook call successful. Response length: " . strlen($webhook_result['response']), 'PROCESSING', 'INFO');
 
                 // Save the final try-on photo
                 $tryon_filename = generate_random_filename('tryon_result.png');
@@ -202,21 +229,25 @@ try {
             }
 
         } catch (Exception $e) {
+            error_log("jewelry_tryon.php: Exception caught in POST handling: " . $e->getMessage() . " on line " . $e->getLine() . " in " . $e->getFile());
             $error_message = handle_exception($e, 'FORM_PROCESSING');
             $state = STATE_FORM; // Reset to form on error
         }
 
     } else {
         // GET request - clear pin states for new session
+        error_log("jewelry_tryon.php: GET request detected. Clearing pin states.");
         $pin_user = false;
         $pin_jewelry = false;
     }
 
 } catch (Exception $e) {
+    error_log("jewelry_tryon.php: Main exception caught: " . $e->getMessage() . " on line " . $e->getLine() . " in " . $e->getFile());
     $error_message = handle_exception($e, 'MAIN_PROCESSING');
     $state = STATE_FORM;
 }
 
+error_log("jewelry_tryon.php: Script execution ending. Rendering template.");
 // Include the template to display the HTML
 require_once 'template.php';
 ?>

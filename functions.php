@@ -688,7 +688,16 @@ function call_webhook($user_photo_path, $jewelry_photo_path) {
         }
 
         $mime_user = mime_content_type($user_path);
+        if ($mime_user === false) {
+             log_error("Failed to determine MIME type for user photo: $user_path. Falling back to application/octet-stream.", 'WEBHOOK_CALL', 'WARNING');
+             $mime_user = 'application/octet-stream';
+        }
+
         $mime_jewelry = mime_content_type($jewelry_path);
+        if ($mime_jewelry === false) {
+            log_error("Failed to determine MIME type for jewelry photo: $jewelry_path. Falling back to application/octet-stream.", 'WEBHOOK_CALL', 'WARNING');
+            $mime_jewelry = 'application/octet-stream';
+        }
 
         $postData = [
             'user_photo' => new CURLFile($user_path, $mime_user, $user_filename),
