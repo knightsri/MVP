@@ -215,6 +215,8 @@ try {
 
             } elseif ($action === ACTION_TRYON) {
                 error_log("jewelry_tryon.php: Handling ACTION_TRYON. Current memory: " . memory_get_usage() . " Peak memory: " . memory_get_peak_usage(), E_USER_NOTICE);
+                log_error("jewelry_tryon.php: ACTION_TRYON received. PostData: " . print_r($postData, true), 'TRYON', 'DEBUG');
+                log_error("jewelry_tryon.php: Current session state before TRYON - user_path: {$user_photo_path}, jewelry_path: {$jewelry_photo_path}, state: {$state}", 'TRYON', 'DEBUG');
 
                 // Sanitize and validate file paths from POST data
                 $user_dest = sanitize_file_path(
@@ -229,6 +231,7 @@ try {
 
                 // Check if paths are valid
                 if ($user_dest === null || $jewelry_dest === null) {
+                    log_error("jewelry_tryon.php: Path validation failed - User: " . (isset($postData['user_photo_path']) ? $postData['user_photo_path'] : 'NULL') . ", Jewelry: " . (isset($postData['jewelry_photo_path']) ? $postData['jewelry_photo_path'] : 'NULL'), 'PROCESSING', 'ERROR');
                     throw new Exception('Invalid file path detected');
                 }
 
