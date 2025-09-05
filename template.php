@@ -79,7 +79,7 @@
                 </table>
 
                 <div class="submit-section">
-                    <button type="submit">Upload/Select Photos</button>
+                    <button type="submit" onclick="return validateSubmission()">Upload/Select Photos</button>
                 </div>
             </form>
         <?php elseif ($state === 'uploaded'): ?>
@@ -230,6 +230,32 @@
                 thumbnails.forEach(thumb => thumb.classList.remove('selected'));
             }
         });
+
+        function validateSubmission() {
+            const userPhotoInput = document.getElementById('user_photo');
+            const jewelryPhotoInput = document.getElementById('jewelry_photo');
+            const userSelected = document.getElementById('user_photo_selected').value;
+            const jewelrySelected = document.getElementById('jewelry_photo_selected').value;
+
+            // Check if user has either uploaded a file or selected from gallery
+            const hasUserPhoto = userPhotoInput.files.length > 0 || userSelected !== '';
+            const hasJewelryPhoto = jewelryPhotoInput.files.length > 0 || jewelrySelected !== '';
+
+            if (!hasUserPhoto || !hasJewelryPhoto) {
+                let missingItems = [];
+                if (!hasUserPhoto) {
+                    missingItems.push('user photo');
+                }
+                if (!hasJewelryPhoto) {
+                    missingItems.push('jewelry photo');
+                }
+
+                alert('Please either upload files or select from gallery for: ' + missingItems.join(' and '));
+                return false; // Prevent form submission
+            }
+
+            return true; // Allow form submission
+        }
     </script>
 </body>
 </html>
