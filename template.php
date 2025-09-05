@@ -237,7 +237,7 @@
             const userSelected = document.getElementById('user_photo_selected').value;
             const jewelrySelected = document.getElementById('jewelry_photo_selected').value;
 
-            // Check if user has either uploaded a file or selected from gallery
+            // Check if user has either uploaded a file or selected from gallery for each item
             const hasUserPhoto = userPhotoInput.files.length > 0 || userSelected !== '';
             const hasJewelryPhoto = jewelryPhotoInput.files.length > 0 || jewelrySelected !== '';
 

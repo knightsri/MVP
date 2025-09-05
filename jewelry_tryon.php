@@ -114,11 +114,19 @@ try {
                 $jewelry_selected_filename = $postData['jewelry_photo_selected'] ?? '';
 
                 // Check if user selected thumbnail or uploaded file
-                if (!empty($user_selected_filename) && !empty($jewelry_selected_filename)) {
-                    $use_thumbnail_selection = true;
-                    log_error("jewelry_tryon.php: Using thumbnail selection mode", 'UPLOAD', 'INFO');
+                $has_user_input = isset($_FILES['user_photo']) && $_FILES['user_photo']['error'] !== UPLOAD_ERR_NO_FILE;
+                $has_jewelry_input = isset($_FILES['jewelry_photo']) && $_FILES['jewelry_photo']['error'] !== UPLOAD_ERR_NO_FILE;
+                $has_user_selection = !empty($user_selected_filename);
+                $has_jewelry_selection = !empty($jewelry_selected_filename);
+
+                // Allow combinations: upload + selection, both uploads, both selections
+                if (($has_user_input || $has_user_selection) && ($has_jewelry_input || $has_jewelry_selection)) {
+                    // Valid combination
+                    if ($has_user_selection || $has_jewelry_selection) {
+                        $use_thumbnail_selection = true;
+                    }
                 } elseif (!validate_uploaded_files($_FILES)) {
-                     log_error("jewelry_tryon.php: validate_uploaded_files failed and no thumbnails selected.", 'UPLOAD', 'ERROR');
+                     log_error("jewelry_tryon.php: No valid input combination found", 'UPLOAD', 'ERROR');
                     throw new Exception('Required photo files are missing or no thumbnails selected');
                 }
 
