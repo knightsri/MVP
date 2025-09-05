@@ -67,14 +67,28 @@ try {
     }
 
     // Initialize session state securely
+
     $session_state = initialize_session_state();
 
-    // Initialize variables from session state
-    $state = get_session_state('state', STATE_FORM);
-    $user_photo_path = get_session_state('user_photo_path', '');
-    $jewelry_photo_path = get_session_state('jewelry_photo_path', '');
-    $tryon_photo_path = get_session_state('tryon_photo_path', '');
-    $error_message = get_session_state('error_message', '');
+    // Check for query parameters to override session state
+    if (isset($_GET['state'])) {
+        $state = $_GET['state'];
+        // Optionally override photo paths if provided
+        $user_photo_path = isset($_GET['user_photo_path']) ? $_GET['user_photo_path'] : get_session_state('user_photo_path', '');
+        $jewelry_photo_path = isset($_GET['jewelry_photo_path']) ? $_GET['jewelry_photo_path'] : get_session_state('jewelry_photo_path', '');
+        $tryon_photo_path = get_session_state('tryon_photo_path', '');
+        $error_message = get_session_state('error_message', '');
+        // Update session state to match query
+        update_session_state('state', $state);
+        update_session_state('user_photo_path', $user_photo_path);
+        update_session_state('jewelry_photo_path', $jewelry_photo_path);
+    } else {
+        $state = get_session_state('state', STATE_FORM);
+        $user_photo_path = get_session_state('user_photo_path', '');
+        $jewelry_photo_path = get_session_state('jewelry_photo_path', '');
+        $tryon_photo_path = get_session_state('tryon_photo_path', '');
+        $error_message = get_session_state('error_message', '');
+    }
 
     // Handle form submissions with comprehensive validation
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -207,7 +221,11 @@ try {
                 update_session_state('tryon_photo_path', $tryon_photo_path);
                 update_session_state('error_message', '');
                 // Redirect to avoid form resubmission and reflect session state
-                header("Location: jewelry_tryon.php");
+                // Redirect with state and photo paths as query parameters
+                $redirect_url = "jewelry_tryon.php?state=" . urlencode($state)
+                    . "&user_photo_path=" . urlencode($user_photo_path)
+                    . "&jewelry_photo_path=" . urlencode($jewelry_photo_path);
+                header("Location: $redirect_url");
                 exit;
 
             } elseif ($action === ACTION_TRYON) {
