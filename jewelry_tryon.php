@@ -246,7 +246,12 @@ try {
 
                 if (!$webhook_result['success']) {
                     log_error("jewelry_tryon.php: Webhook call failed. Error: " . ($webhook_result['error'] ?? 'Unknown'), 'PROCESSING', 'ERROR');
-                    throw new Exception('Webhook processing failed: ' . $webhook_result['error']);
+                    $state = STATE_TRYON_ERROR;
+                    $error_message = 'Jewelry try-on failed due to a timeout or error. Please try again or start over.';
+                    update_session_state('state', $state);
+                    update_session_state('error_message', $error_message);
+                    // Skip normal processing and let template handle error UI
+                    return;
                 }
                 log_error("jewelry_tryon.php: Webhook call successful. Response length: " . strlen($webhook_result['response']), 'PROCESSING', 'INFO');
 

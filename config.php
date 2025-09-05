@@ -35,6 +35,7 @@ define('ALLOWED_EXTENSIONS', ['jpg', 'jpeg', 'png', 'gif']);
 define('STATE_FORM', 'form');
 define('STATE_UPLOADED', 'uploaded');
 define('STATE_PROCESSED', 'processed');
+define('STATE_TRYON_ERROR', 'tryon_error');
 
 // Action constants
 define('ACTION_RESET', 'reset');
