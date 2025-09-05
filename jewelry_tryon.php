@@ -67,28 +67,14 @@ try {
     }
 
     // Initialize session state securely
-
     $session_state = initialize_session_state();
 
-    // Check for query parameters to override session state
-    if (isset($_GET['state'])) {
-        $state = $_GET['state'];
-        // Optionally override photo paths if provided
-        $user_photo_path = isset($_GET['user_photo_path']) ? $_GET['user_photo_path'] : get_session_state('user_photo_path', '');
-        $jewelry_photo_path = isset($_GET['jewelry_photo_path']) ? $_GET['jewelry_photo_path'] : get_session_state('jewelry_photo_path', '');
-        $tryon_photo_path = get_session_state('tryon_photo_path', '');
-        $error_message = get_session_state('error_message', '');
-        // Update session state to match query
-        update_session_state('state', $state);
-        update_session_state('user_photo_path', $user_photo_path);
-        update_session_state('jewelry_photo_path', $jewelry_photo_path);
-    } else {
-        $state = get_session_state('state', STATE_FORM);
-        $user_photo_path = get_session_state('user_photo_path', '');
-        $jewelry_photo_path = get_session_state('jewelry_photo_path', '');
-        $tryon_photo_path = get_session_state('tryon_photo_path', '');
-        $error_message = get_session_state('error_message', '');
-    }
+    // Initialize variables from session state
+    $state = get_session_state('state', STATE_FORM);
+    $user_photo_path = get_session_state('user_photo_path', '');
+    $jewelry_photo_path = get_session_state('jewelry_photo_path', '');
+    $tryon_photo_path = get_session_state('tryon_photo_path', '');
+    $error_message = get_session_state('error_message', '');
 
     // Handle form submissions with comprehensive validation
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -215,18 +201,17 @@ try {
                 $state = STATE_UPLOADED;
                 $tryon_photo_path = '';
                 error_log("File upload completed successfully. Current memory: " . memory_get_usage() . " Peak memory: " . memory_get_peak_usage(), E_USER_NOTICE);
+                // Save all state changes to session
                 update_session_state('state', $state);
                 update_session_state('user_photo_path', $user_photo_path);
                 update_session_state('jewelry_photo_path', $jewelry_photo_path);
                 update_session_state('tryon_photo_path', $tryon_photo_path);
-                update_session_state('error_message', '');
-                // Redirect to avoid form resubmission and reflect session state
-                // Redirect with state and photo paths as query parameters
-                $redirect_url = "jewelry_tryon.php?state=" . urlencode($state)
-                    . "&user_photo_path=" . urlencode($user_photo_path)
-                    . "&jewelry_photo_path=" . urlencode($jewelry_photo_path);
-                header("Location: $redirect_url");
-                exit;
+                update_session_state('error_message', ''); // Clear any previous errors
+
+                log_error("Session state saved after {$action} action", 'SESSION', 'INFO');
+
+                // Do not redirect - let the page display normally with the updated session state
+                // The redirect was causing issues with the display logic
 
             } elseif ($action === ACTION_TRYON) {
                 error_log("jewelry_tryon.php: Handling ACTION_TRYON. Current memory: " . memory_get_usage() . " Peak memory: " . memory_get_peak_usage(), E_USER_NOTICE);
