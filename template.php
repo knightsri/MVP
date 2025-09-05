@@ -123,6 +123,23 @@
         <?php elseif ($state === 'processed' && $tryon_photo_path): ?>
             <!-- Display all images and success message -->
             <div class="success-message">Jewelry try-on completed successfully!</div>
+            <?php elseif ($state === 'tryon_error'): ?>
+                <!-- Try-on error state -->
+                <div class="error-message" style="color: #b00; font-weight: bold; text-align: center; margin: 40px 0;">
+                    <?php echo htmlspecialchars($error_message); ?>
+                </div>
+                <div class="buttons-area" style="text-align: center;">
+                    <form action="" method="POST" style="display: inline;">
+                        <input type="hidden" name="action" value="tryon">
+                        <input type="hidden" name="user_photo_path" value="<?php echo htmlspecialchars($user_photo_path); ?>">
+                        <input type="hidden" name="jewelry_photo_path" value="<?php echo htmlspecialchars($jewelry_photo_path); ?>">
+                        <button type="submit" id="tryonBtn">Try On Jewelry</button>
+                    </form>
+                    <form action="" method="POST" style="display: inline;">
+                        <input type="hidden" name="action" value="reset">
+                        <button type="submit">Start Over</button>
+                    </form>
+                </div>
             <div class="top-section">
                 <div class="image-box">
                     <div class="section-title">Your Photo</div>
@@ -164,6 +181,7 @@
                     <button type="submit">Start Over</button>
                 </form>
             </div>
+    <button type="submit" id="tryonBtn">Try On Jewelry</button>
 
         <?php else: ?>
             <!-- Error state or unexpected condition -->
@@ -213,6 +231,16 @@
         }
 
         // Clear thumbnail selection when file input changes
+        // Prevent double submission for Try On Jewelry
+        document.addEventListener('DOMContentLoaded', function() {
+            var tryonBtn = document.getElementById('tryonBtn');
+            if (tryonBtn) {
+                tryonBtn.addEventListener('click', function(e) {
+                    tryonBtn.disabled = true;
+                    tryonBtn.textContent = 'Processing...';
+                });
+            }
+        });
         document.getElementById('user_photo').addEventListener('change', function() {
             if (this.files.length > 0) {
                 document.getElementById('user_photo_selected').value = '';
