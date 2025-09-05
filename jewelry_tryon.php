@@ -1,8 +1,24 @@
 <?php
-error_log("jewelry_tryon.php: Script execution started."); // General debug log for early issues
-
-// Include configuration first to define constants
+// Include configuration first to define constants, including debug settings
 require_once 'config.php';
+
+if (defined('DEBUG_ENABLED') && DEBUG_ENABLED) {
+    // Force display of all errors for debugging
+    ini_set('display_errors', 1);
+    ini_set('display_startup_errors', 1);
+    error_reporting(E_ALL);
+
+    // Ensure errors are logged to a specific file, useful if system logs aren't accessible
+    ini_set('log_errors', 1);
+    ini_set('error_log', DEBUG_FILE); // Use the debug file defined in config.php
+    error_log("jewelry_tryon.php: Script execution started. Debug logging enabled."); // General debug log for early issues
+} else {
+    // Optionally disable display errors in production if DEBUG_ENABLED is false
+    ini_set('display_errors', 0);
+    ini_set('display_startup_errors', 0);
+    error_reporting(E_ALL); // Still log all errors, but don't display
+}
+
 require_once 'functions.php';
 
 try {

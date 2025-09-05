@@ -60,10 +60,15 @@ define('IMAGE_PNG_COMPRESSION', 6);
 define('IMAGE_WEBP_QUALITY', 80);
 define('IMAGE_BACKUP_ORIGINAL', true);
 
+// Debugging configuration
+define('DEBUG_ENABLED', true); // Set to true to enable forced debug logging
+define('DEBUG_FILE', 'c:/Work/ShalusriInc/MVP/logs/php_error_debug.log'); // Full path to the forced debug log file
+
 // Create required directories
 $required_dirs = [
     $config['uploads']['directory'],
-    dirname(ERROR_LOG_FILE)
+    dirname(ERROR_LOG_FILE),
+    dirname(DEBUG_FILE) // Ensure debug log directory is also created
 ];
 
 foreach ($required_dirs as $dir) {
