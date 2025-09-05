@@ -304,7 +304,7 @@ try {
                         update_session_state('state', $state);
                         update_session_state('error_message', $error_message);
                     } else {
-                        log_error("jewelry_tryon.php: Webhook call successful. Response length: " . strlen($webhook_result['response']), 'PROCESSING', 'INFO');
+                        log_error("jewelry_tryon.php: Webhook call successful. Response length: " . ($webhook_result['response'] ? strlen($webhook_result['response']) : 0), 'PROCESSING', 'INFO');
 
                         // Save the final try-on photo
                         $tryon_filename = generate_random_filename('tryon_result.png');

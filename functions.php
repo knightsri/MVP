@@ -1315,8 +1315,8 @@ if (!function_exists('format_bytes')) {
     function format_bytes($bytes, $precision = 2) {
         $units = array('B', 'KB', 'MB', 'GB', 'TB');
         $bytes = max($bytes, 0);
-    $pow = (int) floor(($bytes ? log($bytes) : 0) / 1024);
-    $pow = min($pow, count($units) - 1);
+    $calculation = ($bytes ? log($bytes) : 0) / 1024;
+    $pow = min((int) floor($calculation), count($units) - 1);
         $bytes /= (1 << (10 * $pow));
         return round($bytes, $precision) . ' ' . $units[$pow];
     }
