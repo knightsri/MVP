@@ -106,33 +106,25 @@ try {
                 $tryon_photo_path = '';
 
             } elseif ($action === ACTION_UPLOAD) {
-                log_error("jewelry_tryon.php: Handling ACTION_UPLOAD. Raw FILES: " . print_r($_FILES, true), 'UPLOAD', 'INFO');
 
-                // Handle photo upload/selection with comprehensive validation
+                log_error("jewelry_tryon.php: Handling ACTION_UPLOAD. Raw FILES: " . print_r($_FILES, true), 'UPLOAD', 'INFO');
+                // ...existing upload logic...
                 $use_thumbnail_selection = false;
                 $user_selected_filename = $postData['user_photo_selected'] ?? '';
                 $jewelry_selected_filename = $postData['jewelry_photo_selected'] ?? '';
-
-                // Check if user selected thumbnail or uploaded file
                 $has_user_input = isset($_FILES['user_photo']) && $_FILES['user_photo']['error'] !== UPLOAD_ERR_NO_FILE;
                 $has_jewelry_input = isset($_FILES['jewelry_photo']) && $_FILES['jewelry_photo']['error'] !== UPLOAD_ERR_NO_FILE;
                 $has_user_selection = !empty($user_selected_filename);
                 $has_jewelry_selection = !empty($jewelry_selected_filename);
-
                 log_error("jewelry_tryon.php: Input detection - User: input={$has_user_input}, selection={$has_user_selection}, Jewelry: input={$has_jewelry_input}, selection={$has_jewelry_selection}", 'UPLOAD', 'DEBUG');
-
-                // Allow combinations: upload + selection, both uploads, both selections
                 if (($has_user_input || $has_user_selection) && ($has_jewelry_input || $has_jewelry_selection)) {
-                    // Valid combination
                     if ($has_user_selection || $has_jewelry_selection) {
                         $use_thumbnail_selection = true;
                     }
                 } elseif (!validate_uploaded_files($_FILES)) {
-                     log_error("jewelry_tryon.php: No valid input combination found", 'UPLOAD', 'ERROR');
+                    log_error("jewelry_tryon.php: No valid input combination found", 'UPLOAD', 'ERROR');
                     throw new Exception('Required photo files are missing or no thumbnails selected');
                 }
-
-                // Handle user photo upload/selection
                 if (!empty($user_selected_filename)) {
                     $user_selected_path = $config['uploads']['directory'] . $user_selected_filename;
                     if (file_exists($user_selected_path)) {
@@ -144,41 +136,29 @@ try {
                 } elseif (isset($_FILES['user_photo']) && $_FILES['user_photo']['error'] === UPLOAD_ERR_OK) {
                     $user_photo = $_FILES['user_photo'];
                     log_error("jewelry_tryon.php: Processing new user photo upload", 'UPLOAD', 'INFO');
-
-                    // Validate user photo
                     $user_validation = validate_file_upload($user_photo);
                     if (!$user_validation['valid']) {
                         throw new Exception('User photo validation failed: ' . $user_validation['error']);
                     }
-
-                    // Generate secure filename and save
                     $user_filename = generate_random_filename($user_photo['name'], 'user_');
                     $user_dest = $config['uploads']['directory'] . $user_filename;
-
                     log_error("jewelry_tryon.php: Moving uploaded user photo from {$user_photo['tmp_name']} to {$user_dest}", 'UPLOAD', 'INFO');
                     if (!move_uploaded_file($user_photo['tmp_name'], $user_dest)) {
                         log_error("jewelry_tryon.php: Failed to save user photo: {$user_photo['tmp_name']} to {$user_dest}", 'UPLOAD', 'ERROR');
                         throw new Exception('Failed to save user photo');
                     }
-
-                    // Set permissions and optimize
                     @chmod($user_dest, $config['uploads']['file_permissions']);
                     $user_optimization = optimize_image($user_dest, $user_filename);
                     if (!$user_optimization) {
                         log_error("User photo optimization failed but upload succeeded: $user_filename", 'UPLOAD', 'WARNING');
                     }
-
-                    // Create thumbnail for gallery display
                     $thumbnail_creation = create_upload_thumbnail($user_dest, $user_filename, 'user_');
                     if (!$thumbnail_creation) {
                         log_error("User thumbnail creation failed: $user_filename", 'UPLOAD', 'WARNING');
                     }
-
                     $user_photo_path = $user_dest;
                     error_log("jewelry_tryon.php: User photo saved to: {$user_dest}. Current memory: " . memory_get_usage(), E_USER_NOTICE);
                 }
-
-                // Handle jewelry photo upload/selection
                 if (!empty($jewelry_selected_filename)) {
                     $jewelry_selected_path = $config['uploads']['directory'] . $jewelry_selected_filename;
                     if (file_exists($jewelry_selected_path)) {
@@ -190,52 +170,45 @@ try {
                 } elseif (isset($_FILES['jewelry_photo']) && $_FILES['jewelry_photo']['error'] === UPLOAD_ERR_OK) {
                     $jewelry_photo = $_FILES['jewelry_photo'];
                     log_error("jewelry_tryon.php: Processing new jewelry photo upload", 'UPLOAD', 'INFO');
-
-                    // Validate jewelry photo
                     $jewelry_validation = validate_file_upload($jewelry_photo);
                     if (!$jewelry_validation['valid']) {
                         throw new Exception('Jewelry photo validation failed: ' . $jewelry_validation['error']);
                     }
-
-                    // Generate secure filename and save
                     $jewelry_filename = generate_random_filename($jewelry_photo['name'], 'jewel_');
                     $jewelry_dest = $config['uploads']['directory'] . $jewelry_filename;
-
                     log_error("jewelry_tryon.php: Moving uploaded jewelry photo from {$jewelry_photo['tmp_name']} to {$jewelry_dest}", 'UPLOAD', 'INFO');
                     if (!move_uploaded_file($jewelry_photo['tmp_name'], $jewelry_dest)) {
                         log_error("jewelry_tryon.php: Failed to save jewelry photo: {$jewelry_photo['tmp_name']} to {$jewelry_dest}", 'UPLOAD', 'ERROR');
                         throw new Exception('Failed to save jewelry photo');
                     }
-
-                    // Set permissions and optimize
                     @chmod($jewelry_dest, $config['uploads']['file_permissions']);
                     $jewelry_optimization = optimize_image($jewelry_dest, $jewelry_filename);
                     if (!$jewelry_optimization) {
                         log_error("Jewelry photo optimization failed but upload succeeded: $jewelry_filename", 'UPLOAD', 'WARNING');
                     }
-
-                    // Create thumbnail for gallery display
                     $thumbnail_creation = create_upload_thumbnail($jewelry_dest, $jewelry_filename, 'jewel_');
                     if (!$thumbnail_creation) {
                         log_error("Jewelry thumbnail creation failed: $jewelry_filename", 'UPLOAD', 'WARNING');
                     }
-
                     $jewelry_photo_path = $jewelry_dest;
                     error_log("jewelry_tryon.php: Jewelry photo saved to: {$jewelry_dest}. Current memory: " . memory_get_usage(), E_USER_NOTICE);
                 }
-
-                // Log final image stats
                 $user_stats = get_image_stats($user_photo_path);
                 $jewelry_stats = get_image_stats($jewelry_photo_path);
                 if ($user_stats && $jewelry_stats) {
                     log_error("Final images - User: {$user_stats['width']}x{$user_stats['height']} ({$user_stats['size_human']}), Jewelry: {$jewelry_stats['width']}x{$jewelry_stats['height']} ({$jewelry_stats['size_human']})", 'UPLOAD', 'INFO');
                 }
-
-                // Update state
                 $state = STATE_UPLOADED;
-                $tryon_photo_path = ''; // Clear any previous try-on result
-
+                $tryon_photo_path = '';
                 error_log("File upload completed successfully. Current memory: " . memory_get_usage() . " Peak memory: " . memory_get_peak_usage(), E_USER_NOTICE);
+                update_session_state('state', $state);
+                update_session_state('user_photo_path', $user_photo_path);
+                update_session_state('jewelry_photo_path', $jewelry_photo_path);
+                update_session_state('tryon_photo_path', $tryon_photo_path);
+                update_session_state('error_message', '');
+                // Redirect to avoid form resubmission and reflect session state
+                header("Location: jewelry_tryon.php");
+                exit;
 
             } elseif ($action === ACTION_TRYON) {
                 error_log("jewelry_tryon.php: Handling ACTION_TRYON. Current memory: " . memory_get_usage() . " Peak memory: " . memory_get_peak_usage(), E_USER_NOTICE);
