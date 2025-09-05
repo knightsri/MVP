@@ -284,10 +284,27 @@ try {
                     // Use cached result
                     log_error("jewelry_tryon.php: Using cached result: $cached_result", 'CACHE_HIT', 'INFO');
 
-                    $state = STATE_PROCESSED;
-                    $tryon_photo_path = $cached_result;
-                    $user_photo_path = $user_dest;
-                    $jewelry_photo_path = $jewelry_dest;
+                    // Verify that all files still exist and are valid
+                    if (!file_exists($cached_result) || filesize($cached_result) === 0) {
+                        log_error("jewelry_tryon.php: Cached result file is missing or corrupted: $cached_result", 'CACHE_VERIFY', 'WARNING');
+                        // Force re-calling webhook by treating as cache miss
+                        $cached_result = false;
+                    } elseif (!file_exists($user_dest) || !file_exists($jewelry_dest)) {
+                        log_error("jewelry_tryon.php: Original source files missing for cached result: $cached_result", 'CACHE_VERIFY', 'WARNING');
+                        // Clear invalid cache and force re-calling webhook
+                        @unlink($cached_result);
+                        $cached_result = false;
+                    }
+
+                    if ($cached_result !== false) {
+                        $state = STATE_PROCESSED;
+                        $tryon_photo_path = $cached_result;
+
+                        // IMPORTANT: Ensure paths are maintained consistently for display
+                        $user_photo_path = $user_dest;
+                        $jewelry_photo_path = $jewelry_dest;
+                        log_error("jewelry_tryon.php: Successfully loaded cached result and verified original photos exist", 'CACHE_VERIFY', 'INFO');
+                    }
 
                 } else {
                     // No cache found, call webhook
