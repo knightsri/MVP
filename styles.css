@@ -110,13 +110,29 @@ input[type="hidden"] {
     text-align: center;
 }
 
+/* Upload Table Layout Styles */
+.upload-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 30px;
+}
+
+.upload-column {
+    width: 50%;
+    vertical-align: top;
+    padding: 0 15px;
+}
+
 /* Thumbnail Gallery Styles */
 .upload-section {
-    margin-bottom: 30px;
     padding: 20px;
-    border: 1px solid #ddd;
-    border-radius: 8px;
     background-color: #f9f9f9;
+    border-radius: 8px;
+}
+
+.submit-section {
+    text-align: center;
+    margin-top: 20px;
 }
 
 .thumbnail-gallery-container {

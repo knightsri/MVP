@@ -21,57 +21,66 @@
                 <input type="hidden" name="user_photo_selected" id="user_photo_selected" value="">
                 <input type="hidden" name="jewelry_photo_selected" id="jewelry_photo_selected" value="">
 
-                <div class="upload-section">
-                    <h3>Upload Your Photo</h3>
-                    <label for="user_photo">Choose file:</label><br>
-                    <input type="file" id="user_photo" name="user_photo" accept="image/*"><br><br>
+                <table class="upload-table">
+                    <tr>
+                        <td class="upload-column">
+                            <div class="upload-section">
+                                <h3>Upload Your Photo</h3>
+                                <label for="user_photo">Choose file:</label><br>
+                                <input type="file" id="user_photo" name="user_photo" accept="image/*"><br><br>
 
-                    <!-- User photos thumbnail gallery -->
-                    <div class="thumbnail-gallery-container">
-                        <h4>Or select from gallery:</h4>
-                        <div class="thumbnail-gallery" id="user-gallery">
-                            <?php
-                            $user_thumbnails = get_user_thumbnails();
-                            foreach ($user_thumbnails as $thumbnail) {
-                                // Convert thumbnail filename back to original filename
-                                $original_filename = str_replace('thumb_', '', $thumbnail);
-                                $thumbnail_url = urlencode('thumbnails/' . $thumbnail);
-                                echo '<img src="?file=' . $thumbnail_url . '" alt="User thumbnail" class="thumbnail" onclick="selectUserThumbnail(\'' . $original_filename . '\')">';
-                            }
-                            if (empty($user_thumbnails)) {
-                                echo '<p class="no-thumbnails">No user photos uploaded yet.</p>';
-                            }
-                            ?>
-                        </div>
-                    </div>
+                                <!-- User photos thumbnail gallery -->
+                                <div class="thumbnail-gallery-container">
+                                    <h4>Or select from gallery:</h4>
+                                    <div class="thumbnail-gallery" id="user-gallery">
+                                        <?php
+                                        $user_thumbnails = get_user_thumbnails();
+                                        foreach ($user_thumbnails as $thumbnail) {
+                                            // Convert thumbnail filename back to original filename
+                                            $original_filename = str_replace('thumb_', '', $thumbnail);
+                                            $thumbnail_url = urlencode('thumbnails/' . $thumbnail);
+                                            echo '<img src="?file=' . $thumbnail_url . '" alt="User thumbnail" class="thumbnail" onclick="selectUserThumbnail(\'' . $original_filename . '\')">';
+                                        }
+                                        if (empty($user_thumbnails)) {
+                                            echo '<p class="no-thumbnails">No user photos uploaded yet.</p>';
+                                        }
+                                        ?>
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="upload-column">
+                            <div class="upload-section">
+                                <h3>Upload Jewelry Photo</h3>
+                                <label for="jewelry_photo">Choose file:</label><br>
+                                <input type="file" id="jewelry_photo" name="jewelry_photo" accept="image/*"><br><br>
+
+                                <!-- Jewelry photos thumbnail gallery -->
+                                <div class="thumbnail-gallery-container">
+                                    <h4>Or select from gallery:</h4>
+                                    <div class="thumbnail-gallery" id="jewelry-gallery">
+                                        <?php
+                                        $jewelry_thumbnails = get_jewelry_thumbnails();
+                                        foreach ($jewelry_thumbnails as $thumbnail) {
+                                            // Convert thumbnail filename back to original filename
+                                            $original_filename = str_replace('thumb_', '', $thumbnail);
+                                            $thumbnail_url = urlencode('thumbnails/' . $thumbnail);
+                                            echo '<img src="?file=' . $thumbnail_url . '" alt="Jewelry thumbnail" class="thumbnail" onclick="selectJewelryThumbnail(\'' . $original_filename . '\')">';
+                                        }
+                                        if (empty($jewelry_thumbnails)) {
+                                            echo '<p class="no-thumbnails">No jewelry photos uploaded yet.</p>';
+                                        }
+                                        ?>
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                </table>
+
+                <div class="submit-section">
+                    <button type="submit">Upload/Select Photos</button>
                 </div>
-
-                <div class="upload-section">
-                    <h3>Upload Jewelry Photo</h3>
-                    <label for="jewelry_photo">Choose file:</label><br>
-                    <input type="file" id="jewelry_photo" name="jewelry_photo" accept="image/*"><br><br>
-
-                    <!-- Jewelry photos thumbnail gallery -->
-                    <div class="thumbnail-gallery-container">
-                        <h4>Or select from gallery:</h4>
-                        <div class="thumbnail-gallery" id="jewelry-gallery">
-                            <?php
-                            $jewelry_thumbnails = get_jewelry_thumbnails();
-                            foreach ($jewelry_thumbnails as $thumbnail) {
-                                // Convert thumbnail filename back to original filename
-                                $original_filename = str_replace('thumb_', '', $thumbnail);
-                                $thumbnail_url = urlencode('thumbnails/' . $thumbnail);
-                                echo '<img src="?file=' . $thumbnail_url . '" alt="Jewelry thumbnail" class="thumbnail" onclick="selectJewelryThumbnail(\'' . $original_filename . '\')">';
-                            }
-                            if (empty($jewelry_thumbnails)) {
-                                echo '<p class="no-thumbnails">No jewelry photos uploaded yet.</p>';
-                            }
-                            ?>
-                        </div>
-                    </div>
-                </div>
-
-                <button type="submit">Upload/Select Photos</button>
             </form>
         <?php elseif ($state === 'uploaded'): ?>
             <!-- Display uploaded photos and allow try-on -->
