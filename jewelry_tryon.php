@@ -246,7 +246,7 @@ try {
 
                 if (!$webhook_result['success']) {
                     log_error("jewelry_tryon.php: Webhook call failed. Error: " . ($webhook_result['error'] ?? 'Unknown'), 'PROCESSING', 'ERROR');
-                    $state = STATE_TRYON_ERROR;
+                    $state = STATE_UPLOADED; // Stay on uploaded photos page
                     $error_message = 'The backend seems to be currently unavailable, please try later.';
                     update_session_state('state', $state);
                     update_session_state('error_message', $error_message);

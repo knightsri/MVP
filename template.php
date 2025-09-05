@@ -108,12 +108,18 @@
                     ?>
                 </div>
             </div>
+            <?php if (!empty($error_message)): ?>
+                <div class="error-message">
+                    <p><?php echo htmlspecialchars($error_message); ?></p>
+                </div>
+            <?php endif; ?>
+
             <div class="buttons-area">
                 <form action="" method="POST" style="display: inline;">
                     <input type="hidden" name="action" value="tryon">
                     <input type="hidden" name="user_photo_path" value="<?php echo htmlspecialchars($user_photo_path); ?>">
                     <input type="hidden" name="jewelry_photo_path" value="<?php echo htmlspecialchars($jewelry_photo_path); ?>">
-                    <button type="submit">Try On Jewelry</button>
+                    <button type="submit" <?php if (!empty($error_message)) echo 'disabled'; ?>>Try On Jewelry</button>
                 </form>
                 <form action="" method="POST" style="display: inline;">
                     <input type="hidden" name="action" value="reset">
@@ -123,23 +129,6 @@
         <?php elseif ($state === 'processed' && $tryon_photo_path): ?>
             <!-- Display all images and success message -->
             <div class="success-message">Jewelry try-on completed successfully!</div>
-            <?php elseif ($state === 'tryon_error'): ?>
-                <!-- Try-on error state -->
-                <div class="error-message" style="color: #b00; font-weight: bold; text-align: center; margin: 40px 0;">
-                    <?php echo htmlspecialchars($error_message); ?>
-                </div>
-                <div class="buttons-area" style="text-align: center;">
-                    <form action="" method="POST" style="display: inline;">
-                        <input type="hidden" name="action" value="tryon">
-                        <input type="hidden" name="user_photo_path" value="<?php echo htmlspecialchars($user_photo_path); ?>">
-                        <input type="hidden" name="jewelry_photo_path" value="<?php echo htmlspecialchars($jewelry_photo_path); ?>">
-                        <button type="submit" id="tryonBtn">Try On Jewelry</button>
-                    </form>
-                    <form action="" method="POST" style="display: inline;">
-                        <input type="hidden" name="action" value="reset">
-                        <button type="submit">Start Over</button>
-                    </form>
-                </div>
             <div class="top-section">
                 <div class="image-box">
                     <div class="section-title">Your Photo</div>
@@ -181,7 +170,6 @@
                     <button type="submit">Start Over</button>
                 </form>
             </div>
-    <button type="submit" id="tryonBtn">Try On Jewelry</button>
 
         <?php else: ?>
             <!-- Error state or unexpected condition -->
