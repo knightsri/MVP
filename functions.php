@@ -128,7 +128,45 @@ function validate_file_path($path, $context = '') {
  * File upload and handling functions (enhanced)
  */
 
-// Function to generate a random filename with original extension and optional prefix
+// Function to generate content-based filename (MD5 hash) for uploads
+function generate_content_based_filename($uploaded_file_path, $prefix = '') {
+    global $config;
+
+    // Calculate MD5 hash of the uploaded file content
+    $file_hash = @md5_file($uploaded_file_path);
+
+    if (!$file_hash) {
+        log_error("Failed to generate MD5 hash for uploaded file: $uploaded_file_path", 'CONTENT_FILENAME', 'ERROR');
+        // Fallback to random filename if hash fails
+        return generate_random_filename(basename($uploaded_file_path), $prefix);
+    }
+
+    // Use prefix if provided, otherwise default to 'img_'
+    $prefix = empty($prefix) ? 'img_' : sanitize_string($prefix, 'CONTENT_FILENAME');
+    $filename = sprintf('%s%s.png', $prefix, $file_hash); // Always PNG for optimized images
+
+    log_error("Generated content-based filename: $filename (from $uploaded_file_path)", 'CONTENT_FILENAME', 'INFO');
+
+    return $filename;
+}
+
+// Function to check if file with same content already exists
+function check_duplicate_content($uploaded_file_path, $prefix = '') {
+    global $config;
+
+    $content_filename = generate_content_based_filename($uploaded_file_path, $prefix);
+    $existing_file_path = $config['uploads']['directory'] . $content_filename;
+
+    if (file_exists($existing_file_path) && filesize($existing_file_path) > 0) {
+        log_error("DUPLICATE_DETECTED: Same content already exists: $existing_file_path", 'CONTENT_CHECK', 'INFO');
+        return $existing_file_path;
+    }
+
+    log_error("NO_DUPLICATE: Content is new, proceeding with upload", 'CONTENT_CHECK', 'INFO');
+    return false;
+}
+
+// Legacy function - generate random filename (kept for backward compatibility)
 function generate_random_filename($original_name, $prefix = '') {
     global $config;
 
